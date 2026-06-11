@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, FileText, ArrowRight } from 'lucide-react';
+import { Clock, FileText, ArrowRight, Copy } from 'lucide-react';
 
 interface Deposito {
   id: number;
@@ -395,14 +395,33 @@ export const TablaPendientes: React.FC<TablaPendientesProps> = ({
                 <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
                   {selectedRemesa.beneficiarios.map((b, i) => (
                     <div key={i} className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-xs space-y-1">
-                      <div className="flex justify-between text-slate-800 font-bold">
-                        <span>{b.banco}</span>
+                      <div className="flex justify-between text-slate-800 font-bold mb-1">
+                        <span>🏦 {b.banco}</span>
                         <span className="text-emerald-600">{selectedRemesa.simboloDestino} {b.monto.toFixed(2)}</span>
                       </div>
                       <div className="text-slate-500 space-y-0.5">
-                        <p>Cuenta: <span className="font-mono font-bold text-slate-700">{b.cuenta}</span></p>
-                        <p>Titular: <span className="font-bold text-slate-700">{b.titular} ({b.cedula})</span></p>
-                        {b.telefono && <p>Teléfono: <span className="font-bold text-slate-700">{b.telefono}</span></p>}
+                        <div className="flex items-center justify-between gap-2">
+                          <p>Cuenta: <span className="font-mono font-bold text-slate-700">{b.cuenta}</span></p>
+                          <button type="button" onClick={() => navigator.clipboard.writeText(b.cuenta)} className="opacity-50 hover:opacity-100 p-1 hover:bg-indigo-100 rounded text-indigo-600 transition" title="Copiar Cuenta"><Copy className="w-3.5 h-3.5" /></button>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <p>Titular: <span className="font-bold text-slate-700">{b.titular}</span></p>
+                          <button type="button" onClick={() => navigator.clipboard.writeText(b.titular)} className="opacity-50 hover:opacity-100 p-1 hover:bg-indigo-100 rounded text-indigo-600 transition" title="Copiar Titular"><Copy className="w-3.5 h-3.5" /></button>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <p>Doc/DNI: <span className="font-bold text-slate-700">{b.cedula}</span></p>
+                          <button type="button" onClick={() => navigator.clipboard.writeText(b.cedula)} className="opacity-50 hover:opacity-100 p-1 hover:bg-indigo-100 rounded text-indigo-600 transition" title="Copiar DNI"><Copy className="w-3.5 h-3.5" /></button>
+                        </div>
+                        {b.telefono && (
+                          <div className="flex items-center justify-between gap-2">
+                            <p>Teléfono: <span className="font-bold text-slate-700">{b.telefono}</span></p>
+                            <button type="button" onClick={() => navigator.clipboard.writeText(b.telefono)} className="opacity-50 hover:opacity-100 p-1 hover:bg-indigo-100 rounded text-indigo-600 transition" title="Copiar Teléfono"><Copy className="w-3.5 h-3.5" /></button>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-200/60 mt-1">
+                          <p>Monto a transferir: <span className="font-bold text-emerald-600">{b.monto.toFixed(2)}</span></p>
+                          <button type="button" onClick={() => navigator.clipboard.writeText(b.monto.toFixed(2))} className="opacity-50 hover:opacity-100 p-1 hover:bg-emerald-100 rounded text-emerald-600 transition" title="Copiar Monto"><Copy className="w-3.5 h-3.5" /></button>
+                        </div>
                       </div>
                     </div>
                   ))}

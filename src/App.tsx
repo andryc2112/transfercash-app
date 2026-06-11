@@ -309,6 +309,11 @@ export default function App() {
         reputacion_san: c.reputacion_san || 0,
         nivel_san: c.nivel_san || 'Bronce',
         estado: c.estado || 'PENDIENTE',
+        banco_nombre: c.banco_nombre || '',
+        banco_cuenta: c.banco_cuenta || '',
+        banco_titular: c.banco_titular || '',
+        banco_cedula: c.banco_cedula || '',
+        binance_wallet: c.binance_wallet || ''
       })));
 
       if (currentSession?.user) {
@@ -841,6 +846,26 @@ export default function App() {
     }
   };
 
+  const handleEditCajero = async (id: string, data: Partial<CajeroPerfil>) => {
+    addAuditLog(`Editó los datos del cajero ${data.nombre}`);
+    const { error } = await supabase
+      .from('perfiles_cajeros')
+      .update({
+        nombre: data.nombre,
+        pais_operacion: data.pais_operacion,
+        banco_nombre: data.banco_nombre,
+        banco_cuenta: data.banco_cuenta,
+        banco_titular: data.banco_titular,
+        banco_cedula: data.banco_cedula,
+        binance_wallet: data.binance_wallet
+      })
+      .eq('id', id);
+    if (!error) {
+      triggerToast(`Datos del cajero ${data.nombre} actualizados exitosamente.`);
+      fetchDatosSupabase();
+    }
+  };
+
   const pendingDepositos = useMemo(() => {
     return depositos.filter(d => d.estado === 'PENDIENTE');
   }, [depositos]);
@@ -1010,6 +1035,7 @@ export default function App() {
           onRejectRetiro={handleRejectRetiro}
           onCancelRemesa={handleCancelRemesa}
           onToggleEstadoCajero={handleToggleEstadoCajero}
+          onEditCajero={handleEditCajero}
           onClose={() => setIsAdminMode(false)}
         />
       ) : !adminEmails.includes(session?.user?.email) && cajeros.find(c => c.id === session?.user?.id)?.estado !== 'ACTIVO' ? (

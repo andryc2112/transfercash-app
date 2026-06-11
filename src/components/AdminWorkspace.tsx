@@ -31,6 +31,11 @@ export interface CajeroPerfil {
   reputacion_san: number;
   nivel_san: string;
   estado?: string;
+  banco_nombre?: string;
+  banco_cuenta?: string;
+  banco_titular?: string;
+  banco_cedula?: string;
+  binance_wallet?: string;
 }
 
 interface AdminWorkspaceProps {
@@ -60,6 +65,7 @@ interface AdminWorkspaceProps {
   onRejectRetiro: (id: number) => void;
   onCancelRemesa: (id: number, motivo: string) => void;
   onToggleEstadoCajero: (id: string, estado: string) => void;
+  onEditCajero: (id: string, data: Partial<CajeroPerfil>) => void;
   onClose: () => void;
 }
 
@@ -90,6 +96,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   onRejectRetiro,
   onCancelRemesa,
   onToggleEstadoCajero,
+  onEditCajero,
   onClose
 }) => {
   const [activeTab, setActiveTab] = useState<'resumen' | 'operaciones' | 'clientes' | 'operadores' | 'retiros' | 'recargas' | 'auditoria' | 'ajustes'>('resumen');
@@ -105,6 +112,14 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   const [adminInput, setAdminInput] = useState(adminEmails.join(', '));
   const [tgInput, setTgInput] = useState(telegramChatId);
   const [selectedPaisPizarra, setSelectedPaisPizarra] = useState<string | null>(null);
+
+  // Modal de Edición de Cajero
+  const [editingCajero, setEditingCajero] = useState<CajeroPerfil | null>(null);
+  const [editCajeroForm, setEditCajeroForm] = useState<Partial<CajeroPerfil>>({});
+
+  React.useEffect(() => {
+    if (editingCajero) setEditCajeroForm(editingCajero);
+  }, [editingCajero]);
 
   // Modal de Telegram Admin
   const [showTelegramModal, setShowTelegramModal] = useState(false);
@@ -900,11 +915,14 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                           ${comisionesHistoricas.toFixed(2)}
                         </td>
                         <td className="p-4 text-center">
-                          {c.estado === 'ACTIVO' ? (
-                            <button onClick={() => onToggleEstadoCajero(c.id, 'PENDIENTE')} className="bg-emerald-500/10 text-emerald-400 border border-emerald-950 px-3 py-1 rounded-full text-[10px] font-black uppercase hover:bg-emerald-500/20 transition">Activo ✅</button>
-                          ) : (
-                            <button onClick={() => onToggleEstadoCajero(c.id, 'ACTIVO')} className="bg-amber-500/10 text-amber-400 border border-amber-950 px-3 py-1 rounded-full text-[10px] font-black uppercase hover:bg-amber-500/20 transition">Aprobar ⏳</button>
-                          )}
+                          <div className="flex gap-2 justify-center">
+                            {c.estado === 'ACTIVO' ? (
+                              <button onClick={() => onToggleEstadoCajero(c.id, 'PENDIENTE')} className="bg-emerald-500/10 text-emerald-400 border border-emerald-950 px-3 py-1 rounded-full text-[10px] font-black uppercase hover:bg-emerald-500/20 transition">Activo ✅</button>
+                            ) : (
+                              <button onClick={() => onToggleEstadoCajero(c.id, 'ACTIVO')} className="bg-amber-500/10 text-amber-400 border border-amber-950 px-3 py-1 rounded-full text-[10px] font-black uppercase hover:bg-amber-500/20 transition">Aprobar ⏳</button>
+                            )}
+                            <button onClick={() => setEditingCajero(c)} className="bg-indigo-500/10 text-indigo-400 border border-indigo-950 px-3 py-1 rounded-full text-[10px] font-black uppercase hover:bg-indigo-500/20 transition" title="Editar Datos">✏️</button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1671,6 +1689,51 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                   {tgSending ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : <Send className="w-4 h-4" />}
                   {tgSending ? 'Enviando...' : 'Enviar a Telegram'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR DATOS DEL CAJERO */}
+      {editingCajero && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-indigo-600 text-white p-5 flex justify-between items-center">
+              <h3 className="font-bold text-base uppercase tracking-wider flex items-center gap-2">
+                ✏️ Editar Datos de Operador
+              </h3>
+              <button onClick={() => setEditingCajero(null)} className="text-white hover:text-indigo-100 text-2xl font-bold">&times;</button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              onEditCajero(editingCajero.id, editCajeroForm);
+              setEditingCajero(null);
+            }} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-none">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Nombre Completo</label>
+                <input type="text" required value={editCajeroForm.nombre || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, nombre: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">País Asignado</label>
+                <select required value={editCajeroForm.pais_operacion || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, pais_operacion: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold">
+                  {Object.entries(paises).map(([code, info]) => {
+                    if (code === 'US' || code === 'PA' || code === 'ZI' || code === 'WA' || code === 'AI') return null;
+                    return <option key={code} value={code}>{info.flag} {info.nombre}</option>;
+                  })}
+                </select>
+              </div>
+              <h4 className="text-indigo-400 font-black text-[10px] uppercase tracking-widest pt-2 border-t border-slate-800">Cuentas Bancarias / Binance</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase">Banco Local</label><input type="text" value={editCajeroForm.banco_nombre || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, banco_nombre: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs" /></div>
+                <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase">Número Cuenta</label><input type="text" value={editCajeroForm.banco_cuenta || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, banco_cuenta: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs" /></div>
+                <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase">Titular Banco</label><input type="text" value={editCajeroForm.banco_titular || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, banco_titular: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs" /></div>
+                <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase">Doc. Titular</label><input type="text" value={editCajeroForm.banco_cedula || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, banco_cedula: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs" /></div>
+              </div>
+              <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Binance Wallet / Pay ID</label><input type="text" value={editCajeroForm.binance_wallet || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, binance_wallet: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm" /></div>
+              <div className="flex gap-3 pt-4 border-t border-slate-800">
+                <button type="button" onClick={() => setEditingCajero(null)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cancelar</button>
+                <button type="submit" className="w-2/3 py-2.5 rounded-lg font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-lg shadow-indigo-600/20 text-xs uppercase">Guardar Cambios ✅</button>
               </div>
             </form>
           </div>

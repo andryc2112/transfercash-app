@@ -26,6 +26,22 @@ export const defaultPaisesData: Record<string, PaisData> = {
   AI: { nombre: 'Airtm', simbolo: 'USDC', flag: '☁️', compra: 1.0, venta: 1.0, color: '#2980b9' },
 };
 
+export const bancosDB: Record<string, string[]> = {
+  'VE': ['Banesco', 'Banco de Venezuela', 'Mercantil', 'Provincial', 'BNC', 'Banco del Tesoro', 'Bicentenario', 'Banplus', 'Banco Plaza', 'Banco Exterior', 'Pago Móvil'],
+  'CO': ['Bancolombia', 'Nequi', 'Daviplata', 'BBVA Colombia', 'Banco de Bogotá', 'Davivienda', 'Colpatria', 'Banco de Occidente', 'Banco Popular', 'Banco AV Villas', 'Caja Social', 'Lulo Bank', 'Dale!'],
+  'PE': ['BCP (Crédito)', 'Interbank', 'BBVA Perú', 'Scotiabank', 'Yape', 'Plin', 'Banco de la Nación', 'BanBif', 'Banco Pichincha', 'Caja Arequipa', 'Caja Huancayo'],
+  'CL': ['BancoEstado (CuentaRUT)', 'Santander', 'Banco de Chile', 'Falabella', 'BCI', 'Tenpo', 'Mach', 'Scotiabank', 'Itaú Chile', 'Banco Security', 'Banco BICE', 'Coopeuch'],
+  'AR': ['MercadoPago', 'Brubank', 'Ualá', 'Santander Río', 'Galicia', 'BBVA Francés', 'Banco Nación', 'Macro', 'Banco Provincia', 'ICBC', 'Supervielle', 'Naranja X', 'Personal Pay', 'Prex'],
+  'ES': ['BBVA', 'Santander', 'CaixaBank', 'Revolut', 'Bizum', 'ING', 'Sabadell', 'Bankinter', 'Kutxabank', 'Abanca', 'Unicaja', 'N26', 'Openbank'],
+  'BR': ['Pix', 'Nubank', 'Itaú', 'Bradesco', 'Banco do Brasil', 'Caixa Econômica', 'Inter', 'Santander Brasil', 'C6 Bank', 'PicPay', 'Mercado Pago', 'PagBank'],
+  'DO': ['Banreservas', 'Banco Popular', 'BHD León', 'Scotiabank', 'Promerica', 'Qik Banco Digital', 'Banco Santa Cruz', 'Asociación Popular (APAP)'],
+  'PA': ['Banco General (Yappy)', 'Banistmo', 'Bac Credomatic', 'Global Bank', 'Multibank', 'Scotiabank', 'Caja de Ahorros', 'Banesco Panamá', 'Nequi Panamá'],
+  'US': ['Zelle', 'Bank of America', 'Wells Fargo', 'Chase', 'Citibank', 'PNC', 'Capital One', 'US Bank', 'Truist', 'TD Bank', 'Cash App', 'Venmo', 'PayPal'],
+  'ZI': ['Zinli (Correo Electrónico)'],
+  'WA': ['Wally Tech (Número de Teléfono)'],
+  'AI': ['Airtm (Correo Electrónico)']
+};
+
 interface CalculadoraRemesaProps {
   onRegisterOperation?: (data: any) => void;
   showWallet?: boolean;
@@ -34,7 +50,7 @@ interface CalculadoraRemesaProps {
   binanceMarketRates?: Record<string, { compra: number; venta: number }>;
 }
 
-export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({ 
+export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
   onRegisterOperation,
   showWallet = true,
   paisesData = defaultPaisesData,
@@ -186,6 +202,16 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
     }
 
     setBeneficiarios(updated);
+  };
+
+  const isMetodoDigital = (bancoNombre: string) => {
+    if (!bancoNombre) return false;
+    const metodosDigitales = [
+      'Pago Móvil', 'Nequi', 'Daviplata', 'Yape', 'Plin', 'Yappy',
+      'Zelle', 'Cash App', 'Venmo', 'PayPal', 'Zinli', 'Wally', 'Airtm',
+      'Bizum', 'Tenpo', 'Mach', 'MercadoPago', 'Ualá', 'Brubank', 'Naranja X'
+    ];
+    return metodosDigitales.some(m => bancoNombre.toLowerCase().includes(m.toLowerCase()));
   };
 
   const totalBeneficiariosMonto = beneficiarios.reduce(
@@ -457,98 +483,112 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
             </div>
 
             <div className="space-y-4">
-              {beneficiarios.map((b, idx) => (
-                <div key={idx} className="relative bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
-                  {beneficiarios.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveBeneficiario(idx)}
-                      className="absolute right-4 top-4 text-red-500 hover:text-red-700 text-xs font-bold"
-                    >
-                      Remover
-                    </button>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Banco Beneficiario</label>
-                      <input
-                        type="text"
-                        required
-                        value={b.banco}
-                        onChange={(e) => handleBeneficiarioChange(idx, 'banco', e.target.value)}
-                        placeholder="Ej: Banesco, Bancolombia"
-                        className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
-                    <div className="space-y-1 md:col-span-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Número de Cuenta / Identificador</label>
-                      <input
-                        type="text"
-                        required
-                        value={b.cuenta}
-                        onChange={(e) => handleBeneficiarioChange(idx, 'cuenta', e.target.value)}
-                        placeholder="Ej: 0102-0000..."
-                        className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Titular Cuenta</label>
-                      <input
-                        type="text"
-                        required
-                        value={b.titular}
-                        onChange={(e) => handleBeneficiarioChange(idx, 'titular', e.target.value)}
-                        className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Cédula / DNI</label>
-                      <input
-                        type="text"
-                        required
-                        value={b.cedula}
-                        onChange={(e) => handleBeneficiarioChange(idx, 'cedula', e.target.value)}
-                        className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Teléfono (Opcional)</label>
-                      <input
-                        type="text"
-                        value={b.telefono}
-                        onChange={(e) => handleBeneficiarioChange(idx, 'telefono', e.target.value)}
-                        className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Monto a Enviar</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          step="0.01"
+              {beneficiarios.map((b, idx) => {
+                const isDigital = isMetodoDigital(b.banco);
+
+                return (
+                  <div key={idx} className="relative bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 transition-all">
+                    {beneficiarios.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveBeneficiario(idx)}
+                        className="absolute right-4 top-4 text-red-500 hover:text-red-700 text-xs font-bold"
+                      >
+                        Remover
+                      </button>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Banco Beneficiario</label>
+                        <select
                           required
-                          value={b.monto}
-                          onChange={(e) => handleBeneficiarioChange(idx, 'monto', e.target.value)}
-                          className="w-full bg-white rounded-lg border border-slate-200 p-2 pr-10 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          value={b.banco}
+                          onChange={(e) => handleBeneficiarioChange(idx, 'banco', e.target.value)}
+                          className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        >
+                          <option value="">Seleccione Banco...</option>
+                          {(bancosDB[paisDestino] || []).map((bancoName) => (
+                            <option key={bancoName} value={bancoName}>{bancoName}</option>
+                          ))}
+                          {b.banco && !(bancosDB[paisDestino] || []).includes(b.banco) && b.banco !== 'Otro' && (
+                            <option value={b.banco}>{b.banco}</option>
+                          )}
+                          <option value="Otro">Otro (Especificar en cuenta)</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1 md:col-span-2">
+                        <label className={`text-xs font-bold uppercase transition-colors ${isDigital ? 'text-indigo-600' : 'text-slate-500'}`}>
+                          {isDigital ? 'Número de Teléfono / Correo' : 'Número de Cuenta'}
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={b.cuenta}
+                          onChange={(e) => handleBeneficiarioChange(idx, 'cuenta', e.target.value)}
+                          placeholder={isDigital ? 'Ej: +58412... o usuario@email.com' : 'Ej: 0102-0000...'}
+                          className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                         />
-                        <span className="absolute right-3 top-2.5 text-xs font-semibold text-slate-400">
-                          {paisesData[paisDestino]?.simbolo}
-                        </span>
+                      </div>
+                    </div>
+                    <div className={`grid grid-cols-1 ${isDigital ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-4`}>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Titular Cuenta</label>
+                        <input
+                          type="text"
+                          required
+                          value={b.titular}
+                          onChange={(e) => handleBeneficiarioChange(idx, 'titular', e.target.value)}
+                          className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Cédula / DNI</label>
+                        <input
+                          type="text"
+                          required
+                          value={b.cedula}
+                          onChange={(e) => handleBeneficiarioChange(idx, 'cedula', e.target.value)}
+                          className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                      </div>
+                      {!isDigital && (
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-500 uppercase">Teléfono (Opcional)</label>
+                          <input
+                            type="text"
+                            value={b.telefono}
+                            onChange={(e) => handleBeneficiarioChange(idx, 'telefono', e.target.value)}
+                            className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Monto a Enviar</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={b.monto}
+                            onChange={(e) => handleBeneficiarioChange(idx, 'monto', e.target.value)}
+                            className="w-full bg-white rounded-lg border border-slate-200 p-2 pr-10 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                          <span className="absolute right-3 top-2.5 text-xs font-semibold text-slate-400">
+                            {paisesData[paisDestino]?.simbolo}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Cuadro de comprobación de la distribución */}
-            <div className={`p-4 rounded-xl border flex items-center justify-between text-sm transition-colors ${
-              isDistribucionCompleta 
-                ? 'bg-emerald-50 border-emerald-100 text-emerald-900' 
+            <div className={`p-4 rounded-xl border flex items-center justify-between text-sm transition-colors ${isDistribucionCompleta
+                ? 'bg-emerald-50 border-emerald-100 text-emerald-900'
                 : 'bg-amber-50 border-amber-100 text-amber-900'
-            }`}>
+              }`}>
               <div className="flex items-center gap-2">
                 {isDistribucionCompleta ? (
                   <Check className="w-5 h-5 text-emerald-500 font-extrabold" />
@@ -557,8 +597,8 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
                 )}
                 <div>
                   <span className="font-bold block">
-                    {isDistribucionCompleta 
-                      ? 'Distribución Completada con éxito' 
+                    {isDistribucionCompleta
+                      ? 'Distribución Completada con éxito'
                       : 'Distribución incompleta'
                     }
                   </span>
@@ -579,11 +619,10 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
           <button
             type="submit"
             disabled={!isDistribucionCompleta}
-            className={`w-full py-4 rounded-xl font-bold uppercase tracking-wider text-white transition-all shadow-lg ${
-              isDistribucionCompleta 
-                ? 'bg-slate-900 hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md' 
+            className={`w-full py-4 rounded-xl font-bold uppercase tracking-wider text-white transition-all shadow-lg ${isDistribucionCompleta
+                ? 'bg-slate-900 hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md'
                 : 'bg-slate-300 cursor-not-allowed shadow-none'
-            }`}
+              }`}
           >
             Registrar Operación 🚀
           </button>

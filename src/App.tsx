@@ -4,7 +4,7 @@ import type { PaisData } from './components/CalculadoraRemesa';
 import { TablaPendientes } from './components/TablaPendientes';
 import { SeccionRetiros } from './components/SeccionRetiros';
 import { SeccionSan } from './components/SeccionSan';
-import { LogOut, Bell, AlertTriangle, Send, Settings } from 'lucide-react';
+import { LogOut, Bell, Send, Settings } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { AdminWorkspace } from './components/AdminWorkspace';
 import type { Cliente, CajeroPerfil } from './components/AdminWorkspace';
@@ -527,8 +527,8 @@ export default function App() {
         triggerToast('Operación registrada exitosamente en Supabase.');
         fetchDatosSupabase();
       }
-    } catch (e: any) {
-      triggerToast(`Error al registrar operación: ${e.message}`);
+    } catch (error: any) {
+      triggerToast(`Error al registrar operación: ${error.message}`);
     }
   };
 
@@ -640,7 +640,7 @@ export default function App() {
     }).then(res => {
       if (res.ok) triggerToast('✅ Reporte enviado a Telegram exitosamente.');
       else triggerToast('Error enviando a Telegram (Revisa Chat ID).');
-    }).catch(e => triggerToast('Error de red enviando a Telegram.'));
+    }).catch(() => triggerToast('Error de red enviando a Telegram.'));
   };
 
   const handleToggleSanTab = async (newValue: boolean) => {
@@ -769,8 +769,8 @@ export default function App() {
         triggerToast('Retiro rechazado. Fondos devueltos al cajero.');
         fetchDatosSupabase();
       }
-    } catch (e: any) {
-      triggerToast(`Error al rechazar retiro: ${e.message}`);
+    } catch (error: any) {
+      triggerToast(`Error al rechazar retiro: ${error.message}`);
     }
   };
 

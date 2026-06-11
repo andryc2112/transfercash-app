@@ -37,6 +37,7 @@ interface TablaPendientesProps {
   onApproveDeposito: (id: number, binanceRef: string, BinanceTasa: number) => void;
   onApproveRemesa: (id: number, bancoRef: string, binanceRef: string, binanceTasa: number, comprobantePagoFile?: File) => void;
   showWallet?: boolean;
+  onViewTracking?: (remesa: Remesa) => void;
 }
 
 export const TablaPendientes: React.FC<TablaPendientesProps> = ({
@@ -45,6 +46,7 @@ export const TablaPendientes: React.FC<TablaPendientesProps> = ({
   onApproveDeposito,
   onApproveRemesa,
   showWallet = true,
+  onViewTracking
 }) => {
   const [selectedDeposito, setSelectedDeposito] = useState<Deposito | null>(null);
   const [selectedRemesa, setSelectedRemesa] = useState<Remesa | null>(null);
@@ -251,7 +253,13 @@ export const TablaPendientes: React.FC<TablaPendientesProps> = ({
                           </span>
                         </div>
 
-                        <div className="pl-4">
+                        <div className="pl-4 flex gap-2">
+                          <button
+                            onClick={() => onViewTracking && onViewTracking(rem)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-extrabold uppercase tracking-wide px-3.5 py-2 rounded-xl transition shadow-sm"
+                          >
+                            🔍 Detalle
+                          </button>
                           <button
                             onClick={() => setSelectedRemesa(rem)}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-extrabold uppercase tracking-wide px-3.5 py-2 rounded-xl transition shadow-md shadow-indigo-600/10"

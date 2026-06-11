@@ -4,7 +4,7 @@ import type { PaisData } from './components/CalculadoraRemesa';
 import { TablaPendientes } from './components/TablaPendientes';
 import { SeccionRetiros } from './components/SeccionRetiros';
 import { SeccionSan } from './components/SeccionSan';
-import { LogOut, Bell, Settings } from 'lucide-react';
+import { LogOut, Bell, Settings, Copy } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { AdminWorkspace } from './components/AdminWorkspace';
 import type { Cliente, CajeroPerfil } from './components/AdminWorkspace';
@@ -44,6 +44,8 @@ interface Remesa {
   estado?: string;
   cajeroOrigen?: string;
   cajeroDestino?: string;
+  cajeroOrigenId?: string;
+  cajeroDestinoId?: string;
   tasaCompra?: number;
   tasaVenta?: number;
   refOrigen?: string;
@@ -77,7 +79,7 @@ interface GrupoSan {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'calculadora' | 'pendientes' | 'retiros' | 'san' | 'historial'>('calculadora');
-  const [cajeroPais] = useState('VE'); // Venezuela
+  const [cajeroPais, setCajeroPais] = useState('VE'); // Actualizado dinámicamente
   const [saldoAcumulado, setSaldoAcumulado] = useState(0);
   const [reputacionSan, setReputacionSan] = useState(85);
   const [nivelSan, setNivelSan] = useState<'Bronce' | 'Plata' | 'Oro'>('Plata');
@@ -262,6 +264,7 @@ export default function App() {
   const [depositos, setDepositos] = useState<Deposito[]>([]);
   const [remesas, setRemesas] = useState<Remesa[]>([]);
   const [retiros, setRetiros] = useState<Retiro[]>([]);
+  const [selectedTracking, setSelectedTracking] = useState<any | null>(null);
   const [gruposSan] = useState<GrupoSan[]>([
     { id: 1, nombre: 'Ahorro Navideño 🎅', cuota: 20.00, moneda: 'USD', estado: 'EN PROGRESO', participantesCount: 10, miTurno: 4 },
     { id: 2, nombre: 'Caja Semanal Taquilla', cuota: 500.00, moneda: 'VES', estado: 'ABIERTO', participantesCount: 5, miTurno: 2 }
@@ -309,17 +312,13 @@ export default function App() {
         reputacion_san: c.reputacion_san || 0,
         nivel_san: c.nivel_san || 'Bronce',
         estado: c.estado || 'PENDIENTE',
-        banco_nombre: c.banco_nombre || '',
-        banco_cuenta: c.banco_cuenta || '',
-        banco_titular: c.banco_titular || '',
-        banco_cedula: c.banco_cedula || '',
-        binance_wallet: c.binance_wallet || ''
       })));
 
       if (currentSession?.user) {
         const miPerfil = cajerosData.find((c: any) => c.id === currentSession.user.id);
         if (miPerfil) {
           setSaldoAcumulado(parseFloat(miPerfil.saldo_acumulado) || 0);
+          setCajeroPais(miPerfil.pais_operacion || 'VE');
         }
       }
     }
@@ -382,6 +381,8 @@ export default function App() {
         estado: r.estado,
         cajeroOrigen: r.cajero_origen ? (cajeroMap[r.cajero_origen] || 'Desconocido') : 'Cliente Directo',
         cajeroDestino: r.cajero_destino ? (cajeroMap[r.cajero_destino] || 'N/A') : 'N/A',
+        cajeroOrigenId: r.cajero_origen,
+        cajeroDestinoId: r.cajero_destino,
         tasaCompra: parseFloat(r.tasa_compra_usdt) || 1.0,
         tasaVenta: parseFloat(r.tasa_venta_usdt) || 1.0,
         refOrigen: r.referencia_banco_receptor || '',
@@ -449,10 +450,6 @@ export default function App() {
       if (tgConfig) {
         setTelegramChatId(tgConfig.valor);
       }
-      const margenConfig = configData.find((c: any) => c.clave === 'tc_margen_global');
-      if (margenConfig) {
-        setMargenGlobal(parseFloat(margenConfig.valor));
-      }
     }
 
     // 5. Fetch configuracion_tasas
@@ -512,59 +509,20 @@ export default function App() {
     }, 4500);
   };
 
-  const handleBuscarCliente = async (cedula: string) => {
+  const handleRegisterOperation = async (data: any) => {
     try {
-      const { data, error } = await supabase
+      // 1. Validar o registrar cliente
+      let clienteId = '';
+      const { data: cliExist } = await supabase
         .from('clientes')
-        .select('*')
-        .eq('cedula_dni', cedula)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) {
-        triggerToast(`✅ Cliente ${data.nombre} encontrado.`);
-        return data;
-      } else {
-        triggerToast(`ℹ️ Cliente nuevo. Llena sus datos y se guardará automáticamente al registrar la operación.`);
-        return null;
-      }
-    } catch (err: any) {
-      triggerToast(`❌ Error buscando cliente: ${err.message}`);
-      return null;
-    }
-  };
-
-  const handleRegisterOperation = async (data: any): Promise<boolean> => {
-    try {
-      let clienteId: string | null = null;
-
-      // 1. Validar si el cliente ya existe
-      const { data: cliExist, error: searchErr } = await supabase
-        .from('clientes')
-        .select('id, wallet_saldo')
+        .select('id')
         .eq('cedula_dni', data.clienteDoc)
-        .maybeSingle(); // Usa maybeSingle para no arrojar error si no existe
-
-      if (searchErr) throw new Error(`Error validando cliente: ${searchErr.message}`);
+        .single();
 
       if (cliExist) {
         clienteId = cliExist.id;
-
-        // 1.5 Si usa wallet, verificar y descontar saldo
-        if (data.usarWallet) {
-          const nuevoSaldo = parseFloat(cliExist.wallet_saldo || '0') - data.montoOrigen;
-          if (nuevoSaldo < 0) throw new Error('Saldo insuficiente en la billetera virtual del cliente.');
-
-          const { error: walletErr } = await supabase
-            .from('clientes')
-            .update({ wallet_saldo: nuevoSaldo })
-            .eq('id', clienteId);
-
-          if (walletErr) throw new Error(`Error descontando saldo de wallet: ${walletErr.message}`);
-        }
       } else {
-        // Si no existe, crearlo
-        const { data: newCli, error: cliErr } = await supabase
+        const { data: newCli } = await supabase
           .from('clientes')
           .insert({
             nombre: data.clienteNombre,
@@ -575,8 +533,6 @@ export default function App() {
           })
           .select('id')
           .single();
-
-        if (cliErr) throw new Error(`Fallo guardando cliente: ${cliErr.message}`);
         if (newCli) clienteId = newCli.id;
       }
 
@@ -589,17 +545,14 @@ export default function App() {
           pais_destino: data.paisDestino,
           monto_origen: data.montoOrigen,
           monto_destino: data.montoDestino,
-          tasa_compra_usdt: data.tasaCompra,
           tasa_venta_aplicada: data.tasaVenta,
-          referencia_compra_binance: data.refBinanceCompra,
-          referencia_banco_receptor: data.refBancoReceptor,
           estado: 'PENDIENTE',
           cajero_origen: session?.user?.id
         })
         .select('id')
         .single();
 
-      if (remError) throw new Error(`Fallo guardando remesa: ${remError.message}`);
+      if (remError) throw remError;
 
       // 3. Insertar Beneficiarios en lote
       if (newRemesa) {
@@ -613,17 +566,12 @@ export default function App() {
           monto: parseFloat(b.monto)
         }));
 
-        const { error: benError } = await supabase.from('remesas_beneficiarios').insert(benPayloads);
-        if (benError) throw new Error(`Fallo guardando cuentas de destino: ${benError.message}`);
-
+        await supabase.from('remesas_beneficiarios').insert(benPayloads);
         triggerToast('Operación registrada exitosamente en Supabase.');
         fetchDatosSupabase();
-        return true; // Éxito, se limpiará el formulario
       }
-      return false;
     } catch (error: any) {
-      triggerToast(`❌ ${error.message}`);
-      return false; // Falló, NO se limpiará el formulario
+      triggerToast(`Error al registrar operación: ${error.message}`);
     }
   };
 
@@ -644,38 +592,18 @@ export default function App() {
   const handleApproveDeposito = async (id: number, binanceRef: string, binanceTasa: number) => {
     addAuditLog(`Aprobó recarga web ID ${id} (Tasa Binance: ${binanceTasa.toFixed(4)}, Ref: ${binanceRef})`);
 
-    try {
-      // 1. Obtener datos del depósito
-      const { data: depData, error: fetchErr } = await supabase
-        .from('depositos')
-        .select('*')
-        .eq('id', id)
-        .single();
+    const { error } = await supabase
+      .from('depositos')
+      .update({
+        estado: 'PAGADO',
+        referencia_compra_binance: binanceRef,
+        tasa_compra_usdt: binanceTasa
+      })
+      .eq('id', id);
 
-      if (fetchErr || !depData) throw new Error('Depósito no encontrado');
-
-      // 2. Sumar saldo al cliente
-      if (depData.cliente_id) {
-        const { data: cliente } = await supabase.from('clientes').select('wallet_saldo').eq('id', depData.cliente_id).single();
-        if (cliente) {
-          const nuevoSaldo = parseFloat(cliente.wallet_saldo || '0') + parseFloat(depData.monto);
-          const { error: walletErr } = await supabase.from('clientes').update({ wallet_saldo: nuevoSaldo }).eq('id', depData.cliente_id);
-          if (walletErr) throw new Error('Error actualizando saldo del cliente');
-        }
-      }
-
-      // 3. Aprobar depósito
-      const { error } = await supabase
-        .from('depositos')
-        .update({ estado: 'PAGADO', referencia_compra_binance: binanceRef, tasa_compra_usdt: binanceTasa })
-        .eq('id', id);
-
-      if (error) throw error;
-
+    if (!error) {
       triggerToast('Depósito de Billetera acreditado y cerrado.');
       fetchDatosSupabase();
-    } catch (e: any) {
-      triggerToast(`❌ Error al aprobar depósito: ${e.message}`);
     }
   };
 
@@ -782,108 +710,73 @@ export default function App() {
       .upsert({ clave: 'showWalletFeatures', valor: String(newValue) }, { onConflict: 'clave' });
   };
 
-  const handleUpdateExchangeRate = (code: string, compra: number, venta: number) => {
+  const handleUpdateExchangeRate = async (code: string, compra: number, venta: number) => {
+    addAuditLog(`Actualizó tasa manual de ${paises[code]?.nombre || code} a Compra: ${compra}, Venta: ${venta}`);
     const updated = {
       ...paises,
-      [code]: { ...paises[code], compra, venta }
+      [code]: {
+        ...paises[code],
+        compra,
+        venta
+      }
     };
     setPaises(updated);
-  };
+    localStorage.setItem('tc_paisesData', JSON.stringify(updated));
 
-  const handleSaveExchangeRate = async (code: string) => {
-    const info = paises[code];
-    addAuditLog(`Guardó tasa manual de ${info.nombre} a Compra: ${info.compra}, Venta: ${info.venta}`);
-    localStorage.setItem('tc_paisesData', JSON.stringify(paises));
-
-    const { error } = await supabase
+    await supabase
       .from('configuracion_tasas')
-      .upsert({ pais_codigo: code, compra: info.compra, venta: info.venta }, { onConflict: 'pais_codigo' });
-
-    if (error) {
-      triggerToast(`Error de Servidor: ${error.message}`);
-    } else {
-      triggerToast(`Tasa de ${paises[code]?.nombre || code} guardada en el servidor con éxito.`);
-    }
+      .upsert({ pais_codigo: code, compra, venta }, { onConflict: 'pais_codigo' });
+    triggerToast(`Tasa de ${paises[code]?.nombre || code} actualizada con éxito.`);
   };
 
   const handleUpdateMargenGlobal = (newMargin: number) => {
+    addAuditLog(`Actualizó el margen global a: ${newMargin}%`);
     setMargenGlobal(newMargin);
-  };
-
-  const handleSaveMargenGlobal = async () => {
-    addAuditLog(`Actualizó y guardó el margen global a: ${margenGlobal}%`);
-    localStorage.setItem('tc_margenGlobal', String(margenGlobal));
-
-    const { error } = await supabase.from('configuracion_global').upsert({ clave: 'tc_margen_global', valor: String(margenGlobal) }, { onConflict: 'clave' });
-    if (error) {
-      triggerToast(`Error de Servidor: ${error.message}`);
-    } else {
-      triggerToast(`Margen global guardado exitosamente en el servidor.`);
-    }
+    localStorage.setItem('tc_margenGlobal', String(newMargin));
+    triggerToast(`Margen global actualizado a ${newMargin}%`);
   };
 
   const handleUpdateAdminEmails = async (emails: string[]) => {
     const uniqueEmails = Array.from(new Set(['andryc2112@gmail.com', ...emails])).filter(e => e);
     setAdminEmails(uniqueEmails);
     addAuditLog('Actualizó la lista de administradores del sistema');
-    const { error } = await supabase.from('configuracion_global').upsert({ clave: 'admin_emails', valor: JSON.stringify(uniqueEmails) }, { onConflict: 'clave' });
-    if (error) triggerToast(`Error: ${error.message}`);
-    else triggerToast('Lista de administradores actualizada.');
+    await supabase.from('configuracion_global').upsert({ clave: 'admin_emails', valor: JSON.stringify(uniqueEmails) }, { onConflict: 'clave' });
+    triggerToast('Lista de administradores actualizada.');
   };
 
   const handleUpdateTelegramChatId = async (id: string) => {
     setTelegramChatId(id);
     addAuditLog('Actualizó el Chat ID de Telegram');
-    const { error } = await supabase.from('configuracion_global').upsert({ clave: 'telegram_chat_id', valor: id }, { onConflict: 'clave' });
-    if (error) triggerToast(`Error: ${error.message}`);
-    else triggerToast('Chat ID de Telegram actualizado.');
+    await supabase.from('configuracion_global').upsert({ clave: 'telegram_chat_id', valor: id }, { onConflict: 'clave' });
+    triggerToast('Chat ID de Telegram actualizado.');
   };
 
 
   const handleCancelRemesa = async (id: number, motivo: string) => {
     addAuditLog(`Canceló remesa TRX-${id} con motivo: ${motivo}`);
 
-    try {
-      // 1. Reembolsar a la wallet si se pagó desde allí
-      const { data: remData } = await supabase.from('remesas').select('*').eq('id', id).single();
+    const { error } = await supabase
+      .from('remesas')
+      .update({ estado: 'CANCELADO', motivo_cancelacion: motivo })
+      .eq('id', id);
 
-      if (remData && (remData.pais_origen === 'Billetera (Web)' || remData.pais_origen === 'Billetera') && remData.cliente_id) {
-        const { data: cliente } = await supabase.from('clientes').select('wallet_saldo').eq('id', remData.cliente_id).single();
-        if (cliente) {
-          const nuevoSaldo = parseFloat(cliente.wallet_saldo || '0') + parseFloat(remData.monto_origen);
-          await supabase.from('clientes').update({ wallet_saldo: nuevoSaldo }).eq('id', remData.cliente_id);
-        }
-      }
-
-      // 2. Cancelar remesa
-      const { error } = await supabase
-        .from('remesas')
-        .update({ estado: 'CANCELADO', motivo_cancelacion: motivo })
-        .eq('id', id);
-
-      if (error) throw error;
-
+    if (!error) {
       triggerToast('Transacción cancelada exitosamente.');
       fetchDatosSupabase();
-    } catch (e: any) {
-      triggerToast(`❌ Error al cancelar transacción: ${e.message}`);
     }
   };
 
   const handleRejectDeposito = async (id: number) => {
     addAuditLog(`Rechazó la solicitud de recarga web ID ${id}`);
 
-    try {
-      const { error } = await supabase
-        .from('depositos')
-        .update({ estado: 'CANCELADO' })
-        .eq('id', id);
+    const { error } = await supabase
+      .from('depositos')
+      .update({ estado: 'CANCELADO' })
+      .eq('id', id);
 
-      if (error) throw error;
+    if (!error) {
       triggerToast('Depósito rechazado y cancelado.');
       fetchDatosSupabase();
-    } catch (e: any) {
-      triggerToast(`❌ Error al rechazar depósito: ${e.message}`);
     }
   };
 
@@ -950,26 +843,6 @@ export default function App() {
       .eq('id', id);
     if (!error) {
       triggerToast(`Estado del cajero actualizado a ${nuevoEstado}.`);
-      fetchDatosSupabase();
-    }
-  };
-
-  const handleEditCajero = async (id: string, data: Partial<CajeroPerfil>) => {
-    addAuditLog(`Editó los datos del cajero ${data.nombre}`);
-    const { error } = await supabase
-      .from('perfiles_cajeros')
-      .update({
-        nombre: data.nombre,
-        pais_operacion: data.pais_operacion,
-        banco_nombre: data.banco_nombre,
-        banco_cuenta: data.banco_cuenta,
-        banco_titular: data.banco_titular,
-        banco_cedula: data.banco_cedula,
-        binance_wallet: data.binance_wallet
-      })
-      .eq('id', id);
-    if (!error) {
-      triggerToast(`Datos del cajero ${data.nombre} actualizados exitosamente.`);
       fetchDatosSupabase();
     }
   };
@@ -1134,18 +1007,15 @@ export default function App() {
           onUpdateTelegramChatId={handleUpdateTelegramChatId}
           onUpdateAdminEmails={handleUpdateAdminEmails}
           onUpdateMargenGlobal={handleUpdateMargenGlobal}
-          onSaveMargenGlobal={handleSaveMargenGlobal}
           onToggleSanTab={handleToggleSanTab}
           onToggleWalletFeatures={handleToggleWalletFeatures}
           onUpdateExchangeRate={handleUpdateExchangeRate}
-          onSaveExchangeRate={handleSaveExchangeRate}
           onApproveDeposito={handleApproveDeposito}
           onRejectDeposito={handleRejectDeposito}
           onApproveRetiro={handleApproveRetiro}
           onRejectRetiro={handleRejectRetiro}
           onCancelRemesa={handleCancelRemesa}
           onToggleEstadoCajero={handleToggleEstadoCajero}
-          onEditCajero={handleEditCajero}
           onClose={() => setIsAdminMode(false)}
         />
       ) : !adminEmails.includes(session?.user?.email) && cajeros.find(c => c.id === session?.user?.id)?.estado !== 'ACTIVO' ? (
@@ -1199,7 +1069,6 @@ export default function App() {
             {activeTab === 'calculadora' && (
               <CalculadoraRemesa
                 onRegisterOperation={handleRegisterOperation}
-                onBuscarCliente={handleBuscarCliente}
                 showWallet={showWalletFeatures}
                 paisesData={paises}
                 margen={margenGlobal}
@@ -1213,6 +1082,7 @@ export default function App() {
                 onApproveDeposito={handleApproveDeposito}
                 onApproveRemesa={handleApproveRemesa}
                 showWallet={showWalletFeatures}
+                onViewTracking={setSelectedTracking}
               />
             )}
             {activeTab === 'retiros' && (
@@ -1246,7 +1116,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {remesas.filter(r => r.estado !== 'PENDIENTE').map(rem => (
+                        {remesas.filter(r => r.cajeroOrigenId === session?.user?.id || r.cajeroDestinoId === session?.user?.id).map(rem => (
                           <tr key={rem.id} className="border-b border-slate-100 hover:bg-slate-50 transition">
                             <td className="p-4 text-xs">
                               <span className="font-bold text-slate-900 block">{rem.cliente}</span>
@@ -1257,13 +1127,45 @@ export default function App() {
                               <span className="block text-slate-500">Monto: {rem.simboloDestino} {rem.montoDestino.toFixed(2)}</span>
                             </td>
                             <td className="p-4 text-center">
-                              <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${rem.estado === 'PAGADO' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                              <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase block w-max mx-auto mb-2 ${rem.estado === 'PAGADO' ? 'bg-emerald-100 text-emerald-700' : rem.estado === 'CANCELADO' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {rem.estado}
                               </span>
+                              <button
+                                onClick={() => setSelectedTracking(rem)}
+                                className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 px-2 py-1.5 rounded font-bold transition flex items-center justify-center gap-1 mx-auto mb-2"
+                                title="Ver Detalle"
+                              >
+                                🔍 Tracking
+                              </button>
+                              {rem.estado === 'PAGADO' && (
+                                <button
+                                  onClick={() => {
+                                    let text = `✅ *RECIBO DE OPERACIÓN*\n------------------------\n`;
+                                    text += `👤 *Cliente:* ${rem.cliente}\n`;
+                                    text += `🆔 *Transacción ID:* TRX-${rem.id}\n`;
+                                    text += `💵 *Monto Enviado:* ${rem.simboloOrigen} ${rem.montoOrigen.toFixed(2)}\n`;
+                                    text += `------------------------\n`;
+                                    rem.beneficiarios.forEach((b: any, idx: number) => {
+                                      text += `🏦 *Cuenta Destino ${rem.beneficiarios.length > 1 ? idx + 1 : ''}*\n`;
+                                      text += `*Banco:* ${b.banco}\n`;
+                                      text += `*Titular:* ${b.titular}\n`;
+                                      text += `*Referencia:* ${rem.refDestino || 'N/A'}\n`;
+                                      text += `*Monto Recibido:* ${rem.simboloDestino} ${b.monto.toFixed(2)}\n\n`;
+                                    });
+                                    text += `🚀 ¡Gracias por usar TransferCash!`;
+                                    navigator.clipboard.writeText(text);
+                                    triggerToast('Recibo copiado al portapapeles');
+                                  }}
+                                  className="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 px-2 py-1.5 rounded font-bold transition flex items-center justify-center gap-1 mx-auto"
+                                  title="Copiar Recibo"
+                                >
+                                  <Copy className="w-3.5 h-3.5" /> Copiar Resumen
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
-                        {remesas.filter(r => r.estado !== 'PENDIENTE').length === 0 && (
+                        {remesas.filter(r => r.cajeroOrigenId === session?.user?.id || r.cajeroDestinoId === session?.user?.id).length === 0 && (
                           <tr><td colSpan={3} className="text-center p-8 text-slate-500">No hay transacciones en el historial.</td></tr>
                         )}
                       </tbody>
@@ -1328,6 +1230,90 @@ export default function App() {
               <span className="text-[10px] uppercase tracking-wider font-semibold">Historial</span>
             </button>
           </nav>
+        </div>
+      )}
+
+      {/* MODAL: TRACKING DE OPERACIÓN (CAJEROS) */}
+      {selectedTracking && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-3xl overflow-hidden animate-in fade-in zoom-in duration-200 text-slate-100 flex flex-col max-h-[90vh]">
+            <div className="bg-slate-900 border-b border-slate-800 p-5 flex justify-between items-center">
+              <h3 className="font-extrabold text-base uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+                🔍 Detalle y Tracking de Operación (TRX-{selectedTracking.id})
+              </h3>
+              <button
+                onClick={() => setSelectedTracking(null)}
+                className="text-slate-400 hover:text-white text-2xl font-bold transition"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6 flex-grow scrollbar-none text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                {/* Bloque Cajero Origen */}
+                <div className="bg-slate-900/40 border-l-4 border-indigo-500 p-5 rounded-r-xl space-y-3">
+                  <h4 className="font-extrabold text-sm text-indigo-400 flex items-center gap-1.5 uppercase">🛫 Cajero Origen</h4>
+                  <p><strong>Cajero:</strong> {selectedTracking.cajeroOrigen || 'Desconocido'}</p>
+                  <p><strong>Fecha Operación:</strong> {selectedTracking.fecha}</p>
+                  <p><strong>País (Desde):</strong> {paises[selectedTracking.origen]?.nombre || selectedTracking.origen}</p>
+                  <p>
+                    <strong>Recibió del Cliente:</strong>{' '}
+                    <span className="text-indigo-400 font-extrabold text-sm">
+                      {paises[selectedTracking.origen]?.simbolo || '$'} {selectedTracking.montoOrigen.toFixed(2)}
+                    </span>
+                  </p>
+                  <p><strong>Referencia Banco:</strong> <span className="font-mono text-slate-300">{selectedTracking.refOrigen || 'N/A'}</span></p>
+                  <hr className="border-slate-800 border-dashed" />
+                  <p className="text-amber-500 font-bold">🔶 Compra en Binance (P2P): {selectedTracking.tasaCompra?.toFixed(4) || '1.0'}</p>
+                  <p><strong>Ref. Binance Compra:</strong> <span className="font-mono text-slate-300">{selectedTracking.refBinanceCompra || 'N/A'}</span></p>
+                </div>
+
+                {/* Bloque Cajero Destino */}
+                <div className="bg-slate-900/40 border-l-4 border-emerald-500 p-5 rounded-r-xl space-y-3">
+                  <h4 className="font-extrabold text-sm text-emerald-400 flex items-center gap-1.5 uppercase">🛬 Cajero Destino</h4>
+                  <p><strong>Cajero:</strong> {selectedTracking.cajeroDestino || 'N/A'}</p>
+                  <p><strong>Estado:</strong>{' '}
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${selectedTracking.estado === 'PAGADO'
+                      ? 'bg-emerald-500/10 text-emerald-400'
+                      : selectedTracking.estado === 'CANCELADO'
+                        ? 'bg-red-500/10 text-red-400'
+                        : 'bg-amber-500/10 text-amber-400'
+                      }`}>
+                      {selectedTracking.estado}
+                    </span>
+                  </p>
+                  <p><strong>País (Hacia):</strong> {paises[selectedTracking.destino]?.nombre || selectedTracking.destino}</p>
+                  <p>
+                    <strong>Entregó al Beneficiario:</strong>{' '}
+                    <span className="text-emerald-400 font-extrabold text-sm">
+                      {paises[selectedTracking.destino]?.simbolo || '$'} {selectedTracking.montoDestino.toFixed(2)}
+                    </span>
+                  </p>
+                  <p><strong>Referencia Emisor:</strong> <span className="font-mono text-slate-300">{selectedTracking.refDestino || 'N/A'}</span></p>
+                  <hr className="border-slate-800 border-dashed" />
+                  <p className="text-amber-500 font-bold">🔶 Venta en Binance: {selectedTracking.tasaVenta?.toFixed(4) || '1.0'}</p>
+                  <p><strong>Ref. Binance Venta:</strong> <span className="font-mono text-slate-300">{selectedTracking.refBinanceVenta || 'N/A'}</span></p>
+                </div>
+
+              </div>
+
+              {/* Datos del Cliente Remitente */}
+              <div className="bg-slate-900/20 border border-slate-800 rounded-xl p-5 space-y-3">
+                <h4 className="font-extrabold text-sm text-slate-200 uppercase">👤 Datos del Cliente Remitente</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <p><strong>Nombre:</strong> {selectedTracking.cliente}</p>
+                  <p><strong>Cédula / DNI:</strong> {selectedTracking.cedula}</p>
+                  <p><strong>Teléfono:</strong> {selectedTracking.telefono || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border-t border-slate-800 p-5 flex justify-end">
+              <button onClick={() => setSelectedTracking(null)} className="px-6 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold uppercase transition">Cerrar Detalle</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

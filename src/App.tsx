@@ -98,6 +98,7 @@ export default function App() {
     const local = localStorage.getItem('tc_showWalletFeatures');
     return local ? local === 'true' : false;
   });
+  const [adminEmails, setAdminEmails] = useState<string[]>(['andryc2112@gmail.com']);
   const [paises, setPaises] = useState<Record<string, PaisData>>(() => {
     const local = localStorage.getItem('tc_paisesData');
     return local ? JSON.parse(local) : defaultPaisesData;
@@ -194,7 +195,7 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: '-5201919939',
+                chat_id: '-5171951585',
                 text,
                 parse_mode: 'Markdown'
               })
@@ -209,7 +210,7 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: '-5201919939',
+                chat_id: '-5171951585',
                 text,
                 parse_mode: 'Markdown'
               })
@@ -410,6 +411,10 @@ export default function App() {
       if (walletConfig) {
         setShowWalletFeatures(walletConfig.valor === 'true');
         localStorage.setItem('tc_showWalletFeatures', walletConfig.valor);
+      }
+      const adminConfig = configData.find((c: any) => c.clave === 'admin_emails');
+      if (adminConfig) {
+        setAdminEmails(JSON.parse(adminConfig.valor));
       }
     }
 
@@ -636,7 +641,7 @@ export default function App() {
     fetch(`https://api.telegram.org/bot8576377601:AAFlnEF38oYA2i1RmwAMGIHY6slsVIvat8c/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: '-5201919939', text: msg, parse_mode: 'Markdown' })
+      body: JSON.stringify({ chat_id: '-5171951585', text: msg, parse_mode: 'Markdown' })
     }).then(res => {
       if (res.ok) triggerToast('✅ Reporte enviado a Telegram exitosamente.');
       else triggerToast('Error enviando a Telegram (Revisa Chat ID).');
@@ -688,6 +693,14 @@ export default function App() {
     setMargenGlobal(newMargin);
     localStorage.setItem('tc_margenGlobal', String(newMargin));
     triggerToast(`Margen global actualizado a ${newMargin}%`);
+  };
+
+  const handleUpdateAdminEmails = async (emails: string[]) => {
+    const uniqueEmails = Array.from(new Set(['andryc2112@gmail.com', ...emails])).filter(e => e);
+    setAdminEmails(uniqueEmails);
+    addAuditLog('Actualizó la lista de administradores del sistema');
+    await supabase.from('configuracion_global').upsert({ clave: 'admin_emails', valor: JSON.stringify(uniqueEmails) }, { onConflict: 'clave' });
+    triggerToast('Lista de administradores actualizada.');
   };
 
 
@@ -846,6 +859,8 @@ export default function App() {
           auditLogs={auditLogs}
           binanceMarketRates={binanceMarketRates}
           margenGlobal={margenGlobal}
+          adminEmails={adminEmails}
+          onUpdateAdminEmails={handleUpdateAdminEmails}
           onUpdateMargenGlobal={handleUpdateMargenGlobal}
           onToggleSanTab={handleToggleSanTab}
           onToggleWalletFeatures={handleToggleWalletFeatures}
@@ -875,13 +890,15 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-4">
-              <button
-                onClick={() => setIsAdminMode(true)}
-                title="Workspace de Administración"
-                className="text-slate-400 hover:text-indigo-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900 flex items-center gap-1.5 text-xs font-bold"
-              >
-                <Settings className="w-3.5 h-3.5 text-indigo-400" /> Admin
-              </button>
+              {adminEmails.includes(session?.user?.email) && (
+                <button
+                  onClick={() => setIsAdminMode(true)}
+                  title="Workspace de Administración"
+                  className="text-slate-400 hover:text-indigo-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900 flex items-center gap-1.5 text-xs font-bold"
+                >
+                  <Settings className="w-3.5 h-3.5 text-indigo-400" /> Admin
+                </button>
+              )}
               <button
                 onClick={simularReporteTelegram}
                 title="Simular Reporte Diario Telegram"

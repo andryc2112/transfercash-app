@@ -44,6 +44,8 @@ interface AdminWorkspaceProps {
   auditLogs: any[];
   binanceMarketRates: Record<string, { compra: number; venta: number }>;
   margenGlobal: number;
+  adminEmails: string[];
+  onUpdateAdminEmails: (emails: string[]) => void;
   onUpdateMargenGlobal: (val: number) => void;
   onToggleSanTab: (val: boolean) => void;
   onToggleWalletFeatures: (val: boolean) => void;
@@ -69,6 +71,8 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   auditLogs,
   binanceMarketRates,
   margenGlobal,
+  adminEmails,
+  onUpdateAdminEmails,
   onUpdateMargenGlobal,
   onToggleSanTab,
   onToggleWalletFeatures,
@@ -90,6 +94,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   // Filtros de operaciones
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [adminInput, setAdminInput] = useState(adminEmails.join(', '));
 
   const globalMargin = margenGlobal;
 
@@ -1037,6 +1042,29 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                   className="w-24 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center focus:outline-none focus:border-indigo-500"
                 />
                 <span className="text-slate-500 leading-tight">Este porcentaje deduce el beneficio estimado cobrado a los clientes al operar remesas.</span>
+              </div>
+            </div>
+
+            {/* Administradores del Sistema */}
+            <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl shadow-md space-y-3">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2 flex justify-between items-center">
+                <span>👑 Accesos de Administrador</span>
+              </h3>
+              <div className="flex flex-col gap-2 text-xs font-bold text-slate-350">
+                <span className="text-slate-400">Correos electrónicos con acceso al panel Admin (separados por coma):</span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={adminInput}
+                    onChange={(e) => setAdminInput(e.target.value)}
+                    placeholder="ejemplo@correo.com, otro@correo.com"
+                    className="w-full bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-2.5 focus:outline-none focus:border-indigo-500"
+                  />
+                  <button onClick={() => onUpdateAdminEmails(adminInput.split(',').map(e => e.trim()))} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold transition">
+                    Guardar
+                  </button>
+                </div>
+                <span className="text-[10px] text-slate-500 leading-tight">El usuario <strong>andryc2112@gmail.com</strong> siempre tendrá acceso por defecto.</span>
               </div>
             </div>
 

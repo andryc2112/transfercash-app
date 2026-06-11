@@ -488,6 +488,10 @@ export default function App() {
         fetchDatosSupabase();
         triggerToast('¡Tasas de cambio actualizadas por el administrador!');
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'perfiles_cajeros' }, () => {
+        fetchDatosSupabase();
+        triggerToast('¡Nuevo cajero registrado o modificado!');
+      })
       .subscribe();
   };
 
@@ -888,7 +892,7 @@ export default function App() {
               } else {
                 triggerToast('Cuenta creada exitosamente. Iniciando sesión...');
                 if (data.user) {
-                  await supabase.from('perfiles_cajeros').upsert({
+                  const { error: profileError } = await supabase.from('perfiles_cajeros').upsert({
                     id: data.user.id,
                     nombre: authNombre || authEmail.split('@')[0],
                     binance_email: authEmail,
@@ -899,6 +903,9 @@ export default function App() {
                     banco_cedula: authBancoCedula,
                     binance_wallet: authBinanceWallet
                   });
+                  if (profileError) {
+                    triggerToast(`Error interno guardando perfil: ${profileError.message}`);
+                  }
                 }
               }
             }

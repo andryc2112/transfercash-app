@@ -246,6 +246,14 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
+  // Campos de registro extendidos
+  const [authPais, setAuthPais] = useState('VE');
+  const [authBancoNombre, setAuthBancoNombre] = useState('');
+  const [authBancoCuenta, setAuthBancoCuenta] = useState('');
+  const [authBancoTitular, setAuthBancoTitular] = useState('');
+  const [authBancoCedula, setAuthBancoCedula] = useState('');
+  const [authBinanceWallet, setAuthBinanceWallet] = useState('');
+
   // Notificaciones
   const [showNotificationToast, setShowNotificationToast] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState('');
@@ -848,7 +856,7 @@ export default function App() {
 
       {/* Contenedor Principal / Admin Workspace */}
       {!session ? (
-        <div className="w-full max-w-sm bg-slate-950 p-8 rounded-3xl border border-slate-800 shadow-2xl">
+        <div className="w-full max-w-md bg-slate-950 p-8 rounded-3xl border border-slate-800 shadow-2xl overflow-y-auto max-h-[90vh] scrollbar-none">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-indigo-600 rounded-2xl mx-auto flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-indigo-600/30 mb-4">TC</div>
             <h1 className="text-2xl font-black text-white uppercase tracking-wide">TransferCash</h1>
@@ -871,27 +879,79 @@ export default function App() {
                     id: data.user.id,
                     nombre: authNombre || authEmail.split('@')[0],
                     binance_email: authEmail,
-                    pais_operacion: 'VE'
+                    pais_operacion: authPais,
+                    banco_nombre: authBancoNombre,
+                    banco_cuenta: authBancoCuenta,
+                    banco_titular: authBancoTitular,
+                    banco_cedula: authBancoCedula,
+                    binance_wallet: authBinanceWallet
                   });
                 }
               }
             }
             setAuthLoading(false);
           }} className="space-y-4">
+
+            {authMode === 'register' && (
+              <h3 className="text-indigo-400 font-black text-xs uppercase tracking-widest border-b border-slate-800 pb-2 mt-4">1. Credenciales y Datos Personales</h3>
+            )}
+
             {authMode === 'register' && (
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Nombre y Apellido</label>
-                <input type="text" value={authNombre} onChange={e => setAuthNombre(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500" />
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Nombre y Apellido</label>
+                <input type="text" value={authNombre} onChange={e => setAuthNombre(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500 text-sm" />
               </div>
             )}
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase">Correo Electrónico</label>
-              <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500" />
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Correo Electrónico</label>
+              <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500 text-sm" />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase">Contraseña</label>
-              <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required minLength={6} className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500" />
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Contraseña</label>
+              <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required minLength={6} className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500 text-sm" />
             </div>
+
+            {authMode === 'register' && (
+              <>
+                <h3 className="text-indigo-400 font-black text-xs uppercase tracking-widest border-b border-slate-800 pb-2 pt-4">2. País y Cuenta Bancaria Local</h3>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">País de Operación</label>
+                  <select value={authPais} onChange={e => setAuthPais(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500 text-sm">
+                    {Object.entries(paises).map(([code, info]) => {
+                      if (code === 'US' || code === 'PA' || code === 'ZI' || code === 'WA' || code === 'AI') return null;
+                      return <option key={code} value={code}>{info.flag} {info.nombre}</option>;
+                    })}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Nombre del Banco</label>
+                    <input type="text" value={authBancoNombre} onChange={e => setAuthBancoNombre(e.target.value)} required placeholder="Ej: Banesco" className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Nro de Cuenta</label>
+                    <input type="text" value={authBancoCuenta} onChange={e => setAuthBancoCuenta(e.target.value)} required placeholder="0102..." className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Titular de Cuenta</label>
+                    <input type="text" value={authBancoTitular} onChange={e => setAuthBancoTitular(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Doc. Identidad Titular</label>
+                    <input type="text" value={authBancoCedula} onChange={e => setAuthBancoCedula(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500 text-sm" />
+                  </div>
+                </div>
+
+                <h3 className="text-indigo-400 font-black text-xs uppercase tracking-widest border-b border-slate-800 pb-2 pt-4">3. Recepción Global</h3>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Binance Pay ID o Wallet USDT</label>
+                  <input type="text" value={authBinanceWallet} onChange={e => setAuthBinanceWallet(e.target.value)} required placeholder="Ej: 0x... / Pay ID" className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500 text-sm" />
+                </div>
+              </>
+            )}
+
             <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition mt-4 shadow-lg shadow-indigo-600/20">
               {authLoading ? 'Procesando...' : (authMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta')}
             </button>

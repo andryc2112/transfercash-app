@@ -75,6 +75,10 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
   const [beneficiarios, setBeneficiarios] = useState<any[]>(() => getDraft().beneficiarios || [
     { banco: '', cuenta: '', telefono: '', titular: '', cedula: '', monto: '' }
   ]);
+  const [tasaCompraInput, setTasaCompraInput] = useState(() => getDraft().tasaCompraInput || '');
+  const [refBinanceCompra, setRefBinanceCompra] = useState(() => getDraft().refBinanceCompra || '');
+  const [refBancoReceptor, setRefBancoReceptor] = useState(() => getDraft().refBancoReceptor || '');
+  const [confirmaEnvioRed, setConfirmaEnvioRed] = useState(() => getDraft().confirmaEnvioRed || false);
   const [walletSaldo, setWalletSaldo] = useState<number | null>(null);
 
   // Autoguardado (Memoria del formulario en tiempo real)
@@ -82,10 +86,11 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
     const draft = {
       paisOrigen, paisDestino, montoOrigen, montoDestino,
       usarWallet, tasaVenta, clienteDoc, clienteNombre,
-      clienteTlf, clienteEmail, beneficiarios
+      clienteTlf, clienteEmail, beneficiarios,
+      tasaCompraInput, refBinanceCompra, refBancoReceptor, confirmaEnvioRed
     };
     localStorage.setItem('tc_draft_remesa', JSON.stringify(draft));
-  }, [paisOrigen, paisDestino, montoOrigen, montoDestino, usarWallet, tasaVenta, clienteDoc, clienteNombre, clienteTlf, clienteEmail, beneficiarios]);
+  }, [paisOrigen, paisDestino, montoOrigen, montoDestino, usarWallet, tasaVenta, clienteDoc, clienteNombre, clienteTlf, clienteEmail, beneficiarios, tasaCompraInput, refBinanceCompra, refBancoReceptor, confirmaEnvioRed]);
 
   const handleClearForm = (skipConfirm = false) => {
     if (skipConfirm || window.confirm('¿Estás seguro de que deseas limpiar todos los datos del formulario?')) {
@@ -101,6 +106,10 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
       setClienteEmail('');
       setBeneficiarios([{ banco: '', cuenta: '', telefono: '', titular: '', cedula: '', monto: '' }]);
       setWalletSaldo(null);
+      setTasaCompraInput('');
+      setRefBinanceCompra('');
+      setRefBancoReceptor('');
+      setConfirmaEnvioRed(false);
     }
   };
 
@@ -135,6 +144,12 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
   useEffect(() => {
     calcularDesdeOrigen();
   }, [paisOrigen, paisDestino, montoOrigen, margen, usarWallet]);
+
+  useEffect(() => {
+    if (paisesData[paisOrigen]) {
+      setTasaCompraInput(paisesData[paisOrigen].compra.toString());
+    }
+  }, [paisOrigen, paisesData]);
 
   useEffect(() => {
     if (!showWallet) {
@@ -289,13 +304,15 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
         montoOrigen: parseFloat(montoOrigen),
         montoDestino: parseFloat(montoDestino),
         tasaVenta: parseFloat(tasaVenta),
-        tasaCompra: usarWallet ? 1 : (paisesData[paisOrigen]?.compra || 1.0),
+        tasaCompra: usarWallet ? 1 : (parseFloat(tasaCompraInput) || paisesData[paisOrigen]?.compra || 1.0),
         clienteDoc,
         clienteNombre,
         clienteTlf,
         clienteEmail,
         beneficiarios,
         usarWallet,
+        refBinanceCompra,
+        refBancoReceptor
       });
 
       if (success) {
@@ -661,6 +678,44 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
               </div>
             </div>
           </div>
+
+          {/* SECCIÓN 4: COBERTURA Y ENVÍO A LA RED (BINANCE) */}
+          {!usarWallet && (
+            <div className="space-y-4">
+              <h3 className="text-slate-900 font-bold border-b pb-2 flex items-center gap-2">
+                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">4</span>
+                Cobertura y Envío a la Red (Binance)
+              </h3>
+              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-5 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Ref. Pago del Cliente</label>
+                    <input type="text" required value={refBancoReceptor} onChange={(e) => setRefBancoReceptor(e.target.value)} placeholder="Ej: Nro de Transferencia" className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Tasa de Compra (Ref)</label>
+                    <input type="number" step="0.0001" required value={tasaCompraInput} onChange={(e) => setTasaCompraInput(e.target.value)} placeholder="0.00" className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Código / Red Binance</label>
+                    <input type="text" required value={refBinanceCompra} onChange={(e) => setRefBinanceCompra(e.target.value)} placeholder="Ej: TxID o Order ID" className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                  </div>
+                </div>
+                <label className="flex items-center gap-3 cursor-pointer bg-white p-3 rounded-lg border border-emerald-200 shadow-sm transition hover:bg-emerald-50">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={confirmaEnvioRed}
+                    onChange={(e) => setConfirmaEnvioRed(e.target.checked)}
+                    className="w-5 h-5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <span className="text-sm font-bold text-slate-700">
+                    Confirmo el envío de los fondos (USDT) a la red de Binance y que la tasa es correcta.
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"

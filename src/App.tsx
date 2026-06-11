@@ -541,7 +541,7 @@ export default function App() {
       // 1. Validar si el cliente ya existe
       const { data: cliExist, error: searchErr } = await supabase
         .from('clientes')
-        .select('id')
+        .select('id, wallet_saldo')
         .eq('cedula_dni', data.clienteDoc)
         .maybeSingle(); // Usa maybeSingle para no arrojar error si no existe
 
@@ -549,6 +549,19 @@ export default function App() {
 
       if (cliExist) {
         clienteId = cliExist.id;
+
+        // 1.5 Si usa wallet, verificar y descontar saldo
+        if (data.usarWallet) {
+          const nuevoSaldo = parseFloat(cliExist.wallet_saldo || '0') - data.montoOrigen;
+          if (nuevoSaldo < 0) throw new Error('Saldo insuficiente en la billetera virtual del cliente.');
+
+          const { error: walletErr } = await supabase
+            .from('clientes')
+            .update({ wallet_saldo: nuevoSaldo })
+            .eq('id', clienteId);
+
+          if (walletErr) throw new Error(`Error descontando saldo de wallet: ${walletErr.message}`);
+        }
       } else {
         // Si no existe, crearlo
         const { data: newCli, error: cliErr } = await supabase
@@ -578,6 +591,8 @@ export default function App() {
           monto_destino: data.montoDestino,
           tasa_compra_usdt: data.tasaCompra,
           tasa_venta_aplicada: data.tasaVenta,
+          referencia_compra_binance: data.refBinanceCompra,
+          referencia_banco_receptor: data.refBancoReceptor,
           estado: 'PENDIENTE',
           cajero_origen: session?.user?.id
         })
@@ -629,18 +644,38 @@ export default function App() {
   const handleApproveDeposito = async (id: number, binanceRef: string, binanceTasa: number) => {
     addAuditLog(`Aprobó recarga web ID ${id} (Tasa Binance: ${binanceTasa.toFixed(4)}, Ref: ${binanceRef})`);
 
-    const { error } = await supabase
-      .from('depositos')
-      .update({
-        estado: 'PAGADO',
-        referencia_compra_binance: binanceRef,
-        tasa_compra_usdt: binanceTasa
-      })
-      .eq('id', id);
+    try {
+      // 1. Obtener datos del depósito
+      const { data: depData, error: fetchErr } = await supabase
+        .from('depositos')
+        .select('*')
+        .eq('id', id)
+        .single();
 
-    if (!error) {
+      if (fetchErr || !depData) throw new Error('Depósito no encontrado');
+
+      // 2. Sumar saldo al cliente
+      if (depData.cliente_id) {
+        const { data: cliente } = await supabase.from('clientes').select('wallet_saldo').eq('id', depData.cliente_id).single();
+        if (cliente) {
+          const nuevoSaldo = parseFloat(cliente.wallet_saldo || '0') + parseFloat(depData.monto);
+          const { error: walletErr } = await supabase.from('clientes').update({ wallet_saldo: nuevoSaldo }).eq('id', depData.cliente_id);
+          if (walletErr) throw new Error('Error actualizando saldo del cliente');
+        }
+      }
+
+      // 3. Aprobar depósito
+      const { error } = await supabase
+        .from('depositos')
+        .update({ estado: 'PAGADO', referencia_compra_binance: binanceRef, tasa_compra_usdt: binanceTasa })
+        .eq('id', id);
+
+      if (error) throw error;
+
       triggerToast('Depósito de Billetera acreditado y cerrado.');
       fetchDatosSupabase();
+    } catch (e: any) {
+      triggerToast(`❌ Error al aprobar depósito: ${e.message}`);
     }
   };
 
@@ -808,28 +843,47 @@ export default function App() {
   const handleCancelRemesa = async (id: number, motivo: string) => {
     addAuditLog(`Canceló remesa TRX-${id} con motivo: ${motivo}`);
 
-    const { error } = await supabase
-      .from('remesas')
-      .update({ estado: 'CANCELADO', motivo_cancelacion: motivo })
-      .eq('id', id);
+    try {
+      // 1. Reembolsar a la wallet si se pagó desde allí
+      const { data: remData } = await supabase.from('remesas').select('*').eq('id', id).single();
 
-    if (!error) {
+      if (remData && (remData.pais_origen === 'Billetera (Web)' || remData.pais_origen === 'Billetera') && remData.cliente_id) {
+        const { data: cliente } = await supabase.from('clientes').select('wallet_saldo').eq('id', remData.cliente_id).single();
+        if (cliente) {
+          const nuevoSaldo = parseFloat(cliente.wallet_saldo || '0') + parseFloat(remData.monto_origen);
+          await supabase.from('clientes').update({ wallet_saldo: nuevoSaldo }).eq('id', remData.cliente_id);
+        }
+      }
+
+      // 2. Cancelar remesa
+      const { error } = await supabase
+        .from('remesas')
+        .update({ estado: 'CANCELADO', motivo_cancelacion: motivo })
+        .eq('id', id);
+
+      if (error) throw error;
+
       triggerToast('Transacción cancelada exitosamente.');
       fetchDatosSupabase();
+    } catch (e: any) {
+      triggerToast(`❌ Error al cancelar transacción: ${e.message}`);
     }
   };
 
   const handleRejectDeposito = async (id: number) => {
     addAuditLog(`Rechazó la solicitud de recarga web ID ${id}`);
 
-    const { error } = await supabase
-      .from('depositos')
-      .update({ estado: 'CANCELADO' })
-      .eq('id', id);
+    try {
+      const { error } = await supabase
+        .from('depositos')
+        .update({ estado: 'CANCELADO' })
+        .eq('id', id);
 
-    if (!error) {
+      if (error) throw error;
       triggerToast('Depósito rechazado y cancelado.');
       fetchDatosSupabase();
+    } catch (e: any) {
+      triggerToast(`❌ Error al rechazar depósito: ${e.message}`);
     }
   };
 

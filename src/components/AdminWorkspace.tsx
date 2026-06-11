@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   TrendingUp,
   Coins,
@@ -70,6 +70,32 @@ interface AdminWorkspaceProps {
   onEditCajero: (id: string, data: Partial<CajeroPerfil>) => void;
   onClose: () => void;
 }
+
+const NumberInput = ({ value, label, onChange, className, step = "0.0001" }: { value: number, label?: string, onChange: (val: number) => void, className: string, step?: string }) => {
+  const [localVal, setLocalVal] = useState(value.toString());
+
+  useEffect(() => {
+    const numLocal = parseFloat(localVal);
+    const validNumLocal = isNaN(numLocal) ? 0 : numLocal;
+    if (validNumLocal !== value) {
+      setLocalVal(value.toString());
+    }
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocalVal(val);
+    const parsed = parseFloat(val);
+    onChange(isNaN(parsed) ? 0 : parsed);
+  };
+
+  return (
+    <div className={label ? "space-y-1" : ""}>
+      {label && <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">{label}</label>}
+      <input type="number" step={step} value={localVal} onChange={handleChange} className={className} />
+    </div>
+  );
+};
 
 export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   remesas,
@@ -1152,11 +1178,10 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-xs font-bold text-slate-350">
                 <span className="text-slate-400">Establecer Margen (%):</span>
                 <div className="flex gap-2">
-                  <input
-                    type="number"
+                  <NumberInput
                     step="0.1"
                     value={margenGlobal}
-                    onChange={(e) => onUpdateMargenGlobal(parseFloat(e.target.value) || 0)}
+                    onChange={onUpdateMargenGlobal}
                     className="w-24 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center focus:outline-none focus:border-indigo-500"
                   />
                   <button onClick={onSaveMargenGlobal} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg font-bold transition shadow-lg">
@@ -1283,26 +1308,20 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Compra</label>
-                          <input
-                            type="number"
-                            step="0.0001"
-                            value={info.compra}
-                            onChange={(e) => onUpdateExchangeRate(code, parseFloat(e.target.value) || 0, info.venta)}
-                            className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Venta</label>
-                          <input
-                            type="number"
-                            step="0.0001"
-                            value={info.venta}
-                            onChange={(e) => onUpdateExchangeRate(code, info.compra, parseFloat(e.target.value) || 0)}
-                            className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
-                          />
-                        </div>
+                        <NumberInput
+                          label="Compra"
+                          step="0.0001"
+                          value={info.compra}
+                          onChange={(val) => onUpdateExchangeRate(code, val, info.venta)}
+                          className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
+                        />
+                        <NumberInput
+                          label="Venta"
+                          step="0.0001"
+                          value={info.venta}
+                          onChange={(val) => onUpdateExchangeRate(code, info.compra, val)}
+                          className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
+                        />
                         <div className="pt-4">
                           <button onClick={() => onSaveExchangeRate(code)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded text-[10px] font-bold uppercase transition shadow-md" title="Guardar Tasa en Servidor">
                             💾

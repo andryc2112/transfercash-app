@@ -545,6 +545,8 @@ export default function App() {
         .eq('cedula_dni', data.clienteDoc)
         .maybeSingle(); // Usa maybeSingle para no arrojar error si no existe
 
+      if (searchErr) throw new Error(`Error validando cliente: ${searchErr.message}`);
+
       if (cliExist) {
         clienteId = cliExist.id;
       } else {

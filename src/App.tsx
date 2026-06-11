@@ -99,6 +99,7 @@ export default function App() {
     return local ? local === 'true' : false;
   });
   const [adminEmails, setAdminEmails] = useState<string[]>(['andryc2112@gmail.com']);
+  const [telegramChatId, setTelegramChatId] = useState<string>('-1005171951585');
   const [paises, setPaises] = useState<Record<string, PaisData>>(() => {
     const local = localStorage.getItem('tc_paisesData');
     return local ? JSON.parse(local) : defaultPaisesData;
@@ -195,7 +196,7 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: '-1005171951585',
+                chat_id: telegramChatId,
                 text,
                 parse_mode: 'Markdown'
               })
@@ -211,7 +212,7 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: '-1005171951585',
+                chat_id: telegramChatId,
                 text,
                 parse_mode: 'Markdown'
               })
@@ -419,6 +420,10 @@ export default function App() {
       const adminConfig = configData.find((c: any) => c.clave === 'admin_emails');
       if (adminConfig) {
         setAdminEmails(JSON.parse(adminConfig.valor));
+      }
+      const tgConfig = configData.find((c: any) => c.clave === 'telegram_chat_id');
+      if (tgConfig) {
+        setTelegramChatId(tgConfig.valor);
       }
     }
 
@@ -645,7 +650,7 @@ export default function App() {
     fetch(`https://api.telegram.org/bot8576377601:AAFlnEF38oYA2i1RmwAMGIHY6slsVIvat8c/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: '-1005171951585', text: msg, parse_mode: 'Markdown' })
+      body: JSON.stringify({ chat_id: telegramChatId, text: msg, parse_mode: 'Markdown' })
     }).then(async res => {
       if (res.ok) triggerToast('✅ Reporte enviado a Telegram exitosamente.');
       else {
@@ -708,6 +713,13 @@ export default function App() {
     addAuditLog('Actualizó la lista de administradores del sistema');
     await supabase.from('configuracion_global').upsert({ clave: 'admin_emails', valor: JSON.stringify(uniqueEmails) }, { onConflict: 'clave' });
     triggerToast('Lista de administradores actualizada.');
+  };
+
+  const handleUpdateTelegramChatId = async (id: string) => {
+    setTelegramChatId(id);
+    addAuditLog('Actualizó el Chat ID de Telegram');
+    await supabase.from('configuracion_global').upsert({ clave: 'telegram_chat_id', valor: id }, { onConflict: 'clave' });
+    triggerToast('Chat ID de Telegram actualizado.');
   };
 
 
@@ -895,6 +907,8 @@ export default function App() {
           binanceMarketRates={binanceMarketRates}
           margenGlobal={margenGlobal}
           adminEmails={adminEmails}
+          telegramChatId={telegramChatId}
+          onUpdateTelegramChatId={handleUpdateTelegramChatId}
           onUpdateAdminEmails={handleUpdateAdminEmails}
           onUpdateMargenGlobal={handleUpdateMargenGlobal}
           onToggleSanTab={handleToggleSanTab}

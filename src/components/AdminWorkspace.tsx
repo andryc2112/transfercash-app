@@ -45,6 +45,8 @@ interface AdminWorkspaceProps {
   binanceMarketRates: Record<string, { compra: number; venta: number }>;
   margenGlobal: number;
   adminEmails: string[];
+  telegramChatId: string;
+  onUpdateTelegramChatId: (id: string) => void;
   onUpdateAdminEmails: (emails: string[]) => void;
   onUpdateMargenGlobal: (val: number) => void;
   onToggleSanTab: (val: boolean) => void;
@@ -72,6 +74,8 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   binanceMarketRates,
   margenGlobal,
   adminEmails,
+  telegramChatId,
+  onUpdateTelegramChatId,
   onUpdateAdminEmails,
   onUpdateMargenGlobal,
   onToggleSanTab,
@@ -95,6 +99,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [adminInput, setAdminInput] = useState(adminEmails.join(', '));
+  const [tgInput, setTgInput] = useState(telegramChatId);
   const [selectedPaisPizarra, setSelectedPaisPizarra] = useState<string | null>(null);
 
   const globalMargin = margenGlobal;
@@ -528,7 +533,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               </div>
               <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                 {Object.entries(paises).map(([code, info]) => {
-                  if (code === 'PA' || code === 'US' || code === 'ZI' || code === 'WA' || code === 'AI') return null;
+                  if (code === 'US' || code === 'PA') return null;
                   return (
                     <button key={code} onClick={() => setSelectedPaisPizarra(code)} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col items-center text-center justify-center shadow-inner hover:bg-slate-800 transition cursor-pointer group">
                       <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">{info.flag}</span>
@@ -1091,6 +1096,28 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               </div>
             </div>
 
+            {/* Configuración Telegram */}
+            <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl shadow-md space-y-3">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2 flex justify-between items-center">
+                <span>🤖 Bot de Telegram (Chat ID)</span>
+              </h3>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-xs font-bold text-slate-350">
+                <span className="text-slate-400">ID del Grupo de Reportes:</span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tgInput}
+                    onChange={(e) => setTgInput(e.target.value)}
+                    className="w-48 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center focus:outline-none focus:border-indigo-500"
+                  />
+                  <button onClick={() => onUpdateTelegramChatId(tgInput.trim())} className="bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-lg font-bold transition">
+                    Guardar ID
+                  </button>
+                </div>
+                <span className="text-[10px] text-slate-500 leading-tight">Si dice "chat not found", reenvía un mensaje del grupo al bot <strong>@RawDataBot</strong> para obtener tu ID exacto (suele empezar con -100).</span>
+              </div>
+            </div>
+
             {/* Toggles de Visibilidad */}
             <div className="space-y-3">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">
@@ -1184,7 +1211,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                         </div>
                       </div>
                     </div>
-                    {code !== 'PA' && code !== 'US' && code !== 'ZI' && code !== 'WA' && code !== 'AI' && (
+                    {code !== 'US' && code !== 'PA' && (
                       <div className="flex justify-between items-center pt-2 border-t border-slate-800/80 mt-1">
                         <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Tasa sugerida al público (1 USD =):</span>
                         <span className="text-xs font-black text-emerald-400">
@@ -1503,7 +1530,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                 Tasas de cambio reales para el cliente <br />(con el margen de ganancia del {margenGlobal}% ya aplicado).
               </p>
               {Object.entries(paises).map(([destCode, destInfo]) => {
-                if (destCode === selectedPaisPizarra || destCode === 'PA' || destCode === 'US' || destCode === 'ZI' || destCode === 'WA' || destCode === 'AI') return null;
+                if (destCode === selectedPaisPizarra || destCode === 'US' || destCode === 'PA') return null;
 
                 const tCompraOrg = paises[selectedPaisPizarra].compra || 1;
                 const tVentaDest = destInfo.venta || 1;

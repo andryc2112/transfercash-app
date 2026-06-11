@@ -195,7 +195,7 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: '-1005171951585',
+                chat_id: '-5171951585',
                 text,
                 parse_mode: 'Markdown'
               })
@@ -210,7 +210,7 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: '-1005171951585',
+                chat_id: '-5171951585',
                 text,
                 parse_mode: 'Markdown'
               })
@@ -643,7 +643,7 @@ export default function App() {
     fetch(`https://api.telegram.org/bot8576377601:AAFlnEF38oYA2i1RmwAMGIHY6slsVIvat8c/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: '-1005171951585', text: msg, parse_mode: 'Markdown' })
+      body: JSON.stringify({ chat_id: '-5171951585', text: msg, parse_mode: 'Markdown' })
     }).then(res => {
       if (res.ok) triggerToast('✅ Reporte enviado a Telegram exitosamente.');
       else triggerToast('Error enviando a Telegram (Revisa Chat ID).');

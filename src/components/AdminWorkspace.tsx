@@ -519,6 +519,29 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
 
             </div>
 
+            {/* Pizarra de Tasas al Público */}
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-xl mt-6">
+              <div className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center">
+                <span className="text-xs font-black uppercase tracking-widest text-emerald-400">💱 Pizarra de Tasas al Público (Sugeridas)</span>
+                <span className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-300 font-bold border border-slate-700">Margen: {margenGlobal}%</span>
+              </div>
+              <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                {Object.entries(paises).map(([code, info]) => {
+                  if (code === 'PA' || code === 'US' || code === 'ZI' || code === 'WA' || code === 'AI') return null;
+                  const sugerida = info.venta * (1 - margenGlobal / 100);
+                  return (
+                    <div key={code} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col items-center text-center justify-center shadow-inner hover:bg-slate-800/50 transition cursor-default">
+                      <span className="text-3xl mb-2">{info.flag}</span>
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Hacia {info.nombre}</span>
+                      <span className="text-xl font-black text-emerald-400 block">
+                        {sugerida.toFixed(code === 'CO' || code === 'CL' || code === 'AR' ? 0 : 2)} <small className="text-[10px] text-slate-500 font-bold ml-0.5">{info.simbolo}</small>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Rendimiento por país */}
             <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
               <div className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center">

@@ -725,10 +725,16 @@ export default function App() {
     const info = paises[code];
     addAuditLog(`Guardó tasa manual de ${info.nombre} a Compra: ${info.compra}, Venta: ${info.venta}`);
     localStorage.setItem('tc_paisesData', JSON.stringify(paises));
-    await supabase
+
+    const { error } = await supabase
       .from('configuracion_tasas')
       .upsert({ pais_codigo: code, compra: info.compra, venta: info.venta }, { onConflict: 'pais_codigo' });
-    triggerToast(`Tasa de ${paises[code]?.nombre || code} actualizada con éxito.`);
+
+    if (error) {
+      triggerToast(`Error de Servidor: ${error.message}`);
+    } else {
+      triggerToast(`Tasa de ${paises[code]?.nombre || code} guardada en el servidor con éxito.`);
+    }
   };
 
   const handleUpdateMargenGlobal = (newMargin: number) => {
@@ -738,23 +744,30 @@ export default function App() {
   const handleSaveMargenGlobal = async () => {
     addAuditLog(`Actualizó y guardó el margen global a: ${margenGlobal}%`);
     localStorage.setItem('tc_margenGlobal', String(margenGlobal));
-    await supabase.from('configuracion_global').upsert({ clave: 'tc_margen_global', valor: String(margenGlobal) }, { onConflict: 'clave' });
-    triggerToast(`Margen global guardado exitosamente en el servidor.`);
+
+    const { error } = await supabase.from('configuracion_global').upsert({ clave: 'tc_margen_global', valor: String(margenGlobal) }, { onConflict: 'clave' });
+    if (error) {
+      triggerToast(`Error de Servidor: ${error.message}`);
+    } else {
+      triggerToast(`Margen global guardado exitosamente en el servidor.`);
+    }
   };
 
   const handleUpdateAdminEmails = async (emails: string[]) => {
     const uniqueEmails = Array.from(new Set(['andryc2112@gmail.com', ...emails])).filter(e => e);
     setAdminEmails(uniqueEmails);
     addAuditLog('Actualizó la lista de administradores del sistema');
-    await supabase.from('configuracion_global').upsert({ clave: 'admin_emails', valor: JSON.stringify(uniqueEmails) }, { onConflict: 'clave' });
-    triggerToast('Lista de administradores actualizada.');
+    const { error } = await supabase.from('configuracion_global').upsert({ clave: 'admin_emails', valor: JSON.stringify(uniqueEmails) }, { onConflict: 'clave' });
+    if (error) triggerToast(`Error: ${error.message}`);
+    else triggerToast('Lista de administradores actualizada.');
   };
 
   const handleUpdateTelegramChatId = async (id: string) => {
     setTelegramChatId(id);
     addAuditLog('Actualizó el Chat ID de Telegram');
-    await supabase.from('configuracion_global').upsert({ clave: 'telegram_chat_id', valor: id }, { onConflict: 'clave' });
-    triggerToast('Chat ID de Telegram actualizado.');
+    const { error } = await supabase.from('configuracion_global').upsert({ clave: 'telegram_chat_id', valor: id }, { onConflict: 'clave' });
+    if (error) triggerToast(`Error: ${error.message}`);
+    else triggerToast('Chat ID de Telegram actualizado.');
   };
 
 

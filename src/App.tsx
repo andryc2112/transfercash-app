@@ -449,6 +449,10 @@ export default function App() {
       if (tgConfig) {
         setTelegramChatId(tgConfig.valor);
       }
+      const margenConfig = configData.find((c: any) => c.clave === 'tc_margen_global');
+      if (margenConfig) {
+        setMargenGlobal(parseFloat(margenConfig.valor));
+      }
     }
 
     // 5. Fetch configuracion_tasas
@@ -709,30 +713,33 @@ export default function App() {
       .upsert({ clave: 'showWalletFeatures', valor: String(newValue) }, { onConflict: 'clave' });
   };
 
-  const handleUpdateExchangeRate = async (code: string, compra: number, venta: number) => {
-    addAuditLog(`Actualizó tasa manual de ${paises[code]?.nombre || code} a Compra: ${compra}, Venta: ${venta}`);
+  const handleUpdateExchangeRate = (code: string, compra: number, venta: number) => {
     const updated = {
       ...paises,
-      [code]: {
-        ...paises[code],
-        compra,
-        venta
-      }
+      [code]: { ...paises[code], compra, venta }
     };
     setPaises(updated);
-    localStorage.setItem('tc_paisesData', JSON.stringify(updated));
+  };
 
+  const handleSaveExchangeRate = async (code: string) => {
+    const info = paises[code];
+    addAuditLog(`Guardó tasa manual de ${info.nombre} a Compra: ${info.compra}, Venta: ${info.venta}`);
+    localStorage.setItem('tc_paisesData', JSON.stringify(paises));
     await supabase
       .from('configuracion_tasas')
-      .upsert({ pais_codigo: code, compra, venta }, { onConflict: 'pais_codigo' });
+      .upsert({ pais_codigo: code, compra: info.compra, venta: info.venta }, { onConflict: 'pais_codigo' });
     triggerToast(`Tasa de ${paises[code]?.nombre || code} actualizada con éxito.`);
   };
 
   const handleUpdateMargenGlobal = (newMargin: number) => {
-    addAuditLog(`Actualizó el margen global a: ${newMargin}%`);
     setMargenGlobal(newMargin);
-    localStorage.setItem('tc_margenGlobal', String(newMargin));
-    triggerToast(`Margen global actualizado a ${newMargin}%`);
+  };
+
+  const handleSaveMargenGlobal = async () => {
+    addAuditLog(`Actualizó y guardó el margen global a: ${margenGlobal}%`);
+    localStorage.setItem('tc_margenGlobal', String(margenGlobal));
+    await supabase.from('configuracion_global').upsert({ clave: 'tc_margen_global', valor: String(margenGlobal) }, { onConflict: 'clave' });
+    triggerToast(`Margen global guardado exitosamente en el servidor.`);
   };
 
   const handleUpdateAdminEmails = async (emails: string[]) => {
@@ -1026,9 +1033,11 @@ export default function App() {
           onUpdateTelegramChatId={handleUpdateTelegramChatId}
           onUpdateAdminEmails={handleUpdateAdminEmails}
           onUpdateMargenGlobal={handleUpdateMargenGlobal}
+          onSaveMargenGlobal={handleSaveMargenGlobal}
           onToggleSanTab={handleToggleSanTab}
           onToggleWalletFeatures={handleToggleWalletFeatures}
           onUpdateExchangeRate={handleUpdateExchangeRate}
+          onSaveExchangeRate={handleSaveExchangeRate}
           onApproveDeposito={handleApproveDeposito}
           onRejectDeposito={handleRejectDeposito}
           onApproveRetiro={handleApproveRetiro}

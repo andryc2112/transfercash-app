@@ -57,20 +57,50 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
   margen = 5.0,
   binanceMarketRates
 }) => {
-  const [paisOrigen, setPaisOrigen] = useState('ES');
-  const [paisDestino, setPaisDestino] = useState('VE');
-  const [montoOrigen, setMontoOrigen] = useState('100');
-  const [montoDestino, setMontoDestino] = useState('');
-  const [usarWallet, setUsarWallet] = useState(false);
-  const [tasaVenta, setTasaVenta] = useState('0');
-  const [clienteDoc, setClienteDoc] = useState('');
-  const [clienteNombre, setClienteNombre] = useState('');
-  const [clienteTlf, setClienteTlf] = useState('');
-  const [clienteEmail, setClienteEmail] = useState('');
-  const [beneficiarios, setBeneficiarios] = useState<any[]>([
+  // Recuperar borrador de la memoria si existe
+  const getDraft = () => JSON.parse(localStorage.getItem('tc_draft_remesa') || '{}');
+
+  const [paisOrigen, setPaisOrigen] = useState(() => getDraft().paisOrigen || 'ES');
+  const [paisDestino, setPaisDestino] = useState(() => getDraft().paisDestino || 'VE');
+  const [montoOrigen, setMontoOrigen] = useState(() => getDraft().montoOrigen || '100');
+  const [montoDestino, setMontoDestino] = useState(() => getDraft().montoDestino || '');
+  const [usarWallet, setUsarWallet] = useState(() => getDraft().usarWallet || false);
+  const [tasaVenta, setTasaVenta] = useState(() => getDraft().tasaVenta || '0');
+  const [clienteDoc, setClienteDoc] = useState(() => getDraft().clienteDoc || '');
+  const [clienteNombre, setClienteNombre] = useState(() => getDraft().clienteNombre || '');
+  const [clienteTlf, setClienteTlf] = useState(() => getDraft().clienteTlf || '');
+  const [clienteEmail, setClienteEmail] = useState(() => getDraft().clienteEmail || '');
+  const [beneficiarios, setBeneficiarios] = useState<any[]>(() => getDraft().beneficiarios || [
     { banco: '', cuenta: '', telefono: '', titular: '', cedula: '', monto: '' }
   ]);
   const [walletSaldo, setWalletSaldo] = useState<number | null>(null);
+
+  // Autoguardado (Memoria del formulario en tiempo real)
+  useEffect(() => {
+    const draft = {
+      paisOrigen, paisDestino, montoOrigen, montoDestino,
+      usarWallet, tasaVenta, clienteDoc, clienteNombre,
+      clienteTlf, clienteEmail, beneficiarios
+    };
+    localStorage.setItem('tc_draft_remesa', JSON.stringify(draft));
+  }, [paisOrigen, paisDestino, montoOrigen, montoDestino, usarWallet, tasaVenta, clienteDoc, clienteNombre, clienteTlf, clienteEmail, beneficiarios]);
+
+  const handleClearForm = (skipConfirm = false) => {
+    if (skipConfirm || window.confirm('¿Estás seguro de que deseas limpiar todos los datos del formulario?')) {
+      setPaisOrigen('ES');
+      setPaisDestino('VE');
+      setMontoOrigen('100');
+      setMontoDestino('');
+      setUsarWallet(false);
+      setTasaVenta('0');
+      setClienteDoc('');
+      setClienteNombre('');
+      setClienteTlf('');
+      setClienteEmail('');
+      setBeneficiarios([{ banco: '', cuenta: '', telefono: '', titular: '', cedula: '', monto: '' }]);
+      setWalletSaldo(null);
+    }
+  };
 
   // Historial local de beneficiarios para autocompletado automático
   const [beneficiariosHistoricos, setBeneficiariosHistoricos] = useState<any[]>(() => {
@@ -262,6 +292,9 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
         beneficiarios,
         usarWallet,
       });
+
+      // Limpiar formulario automáticamente tras un registro exitoso
+      handleClearForm(true);
     }
   };
 
@@ -275,10 +308,17 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
             </h2>
             <p className="text-slate-400 text-sm mt-1">Calculadora de remesas y billetera digital</p>
           </div>
-          <div className="text-right">
+          <div className="flex flex-col items-end gap-2">
             <span className="text-[10px] bg-indigo-50 px-2 py-1 rounded text-indigo-700 font-bold uppercase border border-indigo-100">
               Operación Directa
             </span>
+            <button
+              type="button"
+              onClick={() => handleClearForm(false)}
+              className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 rounded font-bold uppercase transition flex items-center gap-1"
+            >
+              🗑️ Limpiar Datos
+            </button>
           </div>
         </div>
 
@@ -586,8 +626,8 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
 
             {/* Cuadro de comprobación de la distribución */}
             <div className={`p-4 rounded-xl border flex items-center justify-between text-sm transition-colors ${isDistribucionCompleta
-                ? 'bg-emerald-50 border-emerald-100 text-emerald-900'
-                : 'bg-amber-50 border-amber-100 text-amber-900'
+              ? 'bg-emerald-50 border-emerald-100 text-emerald-900'
+              : 'bg-amber-50 border-amber-100 text-amber-900'
               }`}>
               <div className="flex items-center gap-2">
                 {isDistribucionCompleta ? (
@@ -620,8 +660,8 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
             type="submit"
             disabled={!isDistribucionCompleta}
             className={`w-full py-4 rounded-xl font-bold uppercase tracking-wider text-white transition-all shadow-lg ${isDistribucionCompleta
-                ? 'bg-slate-900 hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md'
-                : 'bg-slate-300 cursor-not-allowed shadow-none'
+              ? 'bg-slate-900 hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md'
+              : 'bg-slate-300 cursor-not-allowed shadow-none'
               }`}
           >
             Registrar Operación 🚀

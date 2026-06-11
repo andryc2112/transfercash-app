@@ -56,9 +56,11 @@ interface AdminWorkspaceProps {
   onUpdateTelegramChatId: (id: string) => void;
   onUpdateAdminEmails: (emails: string[]) => void;
   onUpdateMargenGlobal: (val: number) => void;
+  onSaveMargenGlobal: () => void;
   onToggleSanTab: (val: boolean) => void;
   onToggleWalletFeatures: (val: boolean) => void;
   onUpdateExchangeRate: (code: string, compra: number, venta: number) => void;
+  onSaveExchangeRate: (code: string) => void;
   onApproveDeposito: (id: number, binanceRef: string, binanceTasa: number) => void;
   onRejectDeposito: (id: number) => void;
   onApproveRetiro: (id: number) => void;
@@ -87,9 +89,11 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   onUpdateTelegramChatId,
   onUpdateAdminEmails,
   onUpdateMargenGlobal,
+  onSaveMargenGlobal,
   onToggleSanTab,
   onToggleWalletFeatures,
   onUpdateExchangeRate,
+  onSaveExchangeRate,
   onApproveDeposito,
   onRejectDeposito,
   onApproveRetiro,
@@ -1147,13 +1151,18 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               </h3>
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-xs font-bold text-slate-350">
                 <span className="text-slate-400">Establecer Margen (%):</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={margenGlobal}
-                  onChange={(e) => onUpdateMargenGlobal(parseFloat(e.target.value) || 0)}
-                  className="w-24 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center focus:outline-none focus:border-indigo-500"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={margenGlobal}
+                    onChange={(e) => onUpdateMargenGlobal(parseFloat(e.target.value) || 0)}
+                    className="w-24 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center focus:outline-none focus:border-indigo-500"
+                  />
+                  <button onClick={onSaveMargenGlobal} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg font-bold transition shadow-lg">
+                    Guardar
+                  </button>
+                </div>
                 <span className="text-slate-500 leading-tight">Este porcentaje deduce el beneficio estimado cobrado a los clientes al operar remesas.</span>
               </div>
             </div>
@@ -1293,6 +1302,11 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                             onChange={(e) => onUpdateExchangeRate(code, info.compra, parseFloat(e.target.value) || 0)}
                             className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
                           />
+                        </div>
+                        <div className="pt-4">
+                          <button onClick={() => onSaveExchangeRate(code)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded text-[10px] font-bold uppercase transition shadow-md" title="Guardar Tasa en Servidor">
+                            💾
+                          </button>
                         </div>
                       </div>
                     </div>

@@ -76,9 +76,9 @@ interface GrupoSan {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'calculadora' | 'pendientes' | 'retiros' | 'san'>('calculadora');
+  const [activeTab, setActiveTab] = useState<'calculadora' | 'pendientes' | 'retiros' | 'san' | 'historial'>('calculadora');
   const [cajeroPais] = useState('VE'); // Venezuela
-  const [saldoAcumulado, setSaldoAcumulado] = useState(1280.45);
+  const [saldoAcumulado, setSaldoAcumulado] = useState(0);
   const [reputacionSan, setReputacionSan] = useState(85);
   const [nivelSan, setNivelSan] = useState<'Bronce' | 'Plata' | 'Oro'>('Plata');
 
@@ -224,9 +224,11 @@ export default function App() {
     return () => clearTimeout(timeout);
   }, [binanceMarketRates, paises, paisesConAlertaEnviada]);
 
-
-  // Modo simulación vs Supabase Real
-  const [isSimulationMode, setIsSimulationMode] = useState(true);
+  // Autenticación Supabase
+  const [session, setSession] = useState<any>(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
 
   // Notificaciones
   const [showNotificationToast, setShowNotificationToast] = useState(false);
@@ -243,141 +245,27 @@ export default function App() {
 
   // Verificar la conexión de Supabase al iniciar
   useEffect(() => {
-    const checkSupabaseConnection = () => {
-      const url = import.meta.env.VITE_SUPABASE_URL;
-      const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-      if (!url || url.includes('placeholder-project') || !key || key.includes('placeholder-anon-key')) {
-        // Credenciales sin configurar: Forzar modo simulación con datos de ejemplo
-        setIsSimulationMode(true);
-        cargarMocks();
-      } else {
-        // Intentar usar conexión real
-        setIsSimulationMode(false);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
         fetchDatosSupabase();
         suscribirseCambiosSupabase();
       }
-    };
+    });
 
-    checkSupabaseConnection();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        fetchDatosSupabase();
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
-  const cargarMocks = () => {
-    // Cajeros mock
-    const mockCajeros: CajeroPerfil[] = [
-      { id: 'caj-1', nombre: 'Carlos Mendoza', email: 'carlos.m@transfercash.com', pais_operacion: 'VE', saldo_acumulado: 1280.45, reputacion_san: 85, nivel_san: 'Plata' },
-      { id: 'caj-2', nombre: 'Ana Gómez', email: 'ana.g@transfercash.com', pais_operacion: 'ES', saldo_acumulado: 4320.10, reputacion_san: 98, nivel_san: 'Oro' },
-      { id: 'caj-3', nombre: 'Juan Silva', email: 'juan.s@transfercash.com', pais_operacion: 'PE', saldo_acumulado: 950.00, reputacion_san: 70, nivel_san: 'Bronce' }
-    ];
-    setCajeros(mockCajeros);
-
-    // Clientes mock
-    setClientes([
-      { id: 'cli-1', nombre: 'Juan Pérez', cedula_dni: '12345678', telefono: '+584121234567', email: 'juan.perez@email.com', wallet_saldo: 450.50 },
-      { id: 'cli-2', nombre: 'Lucía Fernández', cedula_dni: 'V-20123456', telefono: '+34612345678', email: 'lucia.f@email.com', wallet_saldo: 0.00 }
-    ]);
-
-    setDepositos([
-      {
-        id: 101,
-        cliente: 'Juan Pérez',
-        cedula: '12345678',
-        monto: 150.00,
-        ref: 'REF-87429',
-        comprobanteUrl: 'https://images.unsplash.com/photo-1616077168712-fc6c788bc4ee?q=80&w=400&auto=format&fit=crop',
-        estado: 'PENDIENTE',
-        tasaCompra: 1.0,
-        refBinance: ''
-      },
-      {
-        id: 102,
-        cliente: 'Pedro Torres',
-        cedula: '87654321',
-        monto: 300.00,
-        ref: 'REF-99881',
-        comprobanteUrl: '',
-        estado: 'PAGADO',
-        tasaCompra: 1.0,
-        refBinance: 'B-ORDER-8712'
-      }
-    ]);
-
-    setRemesas([
-      {
-        id: 201,
-        origen: 'ES',
-        destino: 'VE',
-        montoOrigen: 100.00,
-        montoDestino: 3820.00,
-        simboloOrigen: 'EUR',
-        simboloDestino: 'VES',
-        cliente: 'Lucía Fernández',
-        cedula: 'V-20123456',
-        telefono: '+34612345678',
-        fecha: '11/06 09:15',
-        estado: 'PENDIENTE',
-        cajeroOrigen: 'Ana Gómez',
-        cajeroDestino: 'Carlos Mendoza',
-        tasaCompra: 0.92,
-        tasaVenta: 38.2,
-        refOrigen: 'REF-88219',
-        refBinanceCompra: 'BIN-COMP-1',
-        refDestino: '',
-        refBinanceVenta: '',
-        gananciaCalculada: 8.70,
-        beneficiarios: [
-          {
-            banco: 'Banesco',
-            cuenta: '0102-0100-22-1234567890',
-            telefono: '04141234567',
-            titular: 'María Fernández',
-            cedula: 'V-9876543',
-            monto: 3820.00
-          }
-        ]
-      },
-      {
-        id: 202,
-        origen: 'PE',
-        destino: 'VE',
-        montoOrigen: 400.00,
-        montoDestino: 4050.00,
-        simboloOrigen: 'PEN',
-        simboloDestino: 'VES',
-        cliente: 'Juan Pérez',
-        cedula: '12345678',
-        telefono: '+584121234567',
-        fecha: '10/06 14:30',
-        estado: 'PAGADO',
-        cajeroOrigen: 'Juan Silva',
-        cajeroDestino: 'Carlos Mendoza',
-        tasaCompra: 3.72,
-        tasaVenta: 38.2,
-        refOrigen: 'REF-77112',
-        refBinanceCompra: 'BIN-COMP-2',
-        refDestino: 'REF-EM-9921',
-        refBinanceVenta: 'BIN-VENT-2',
-        gananciaCalculada: 22.45,
-        beneficiarios: [
-          {
-            banco: 'Mercantil',
-            cuenta: '0105-0200-33-0987654321',
-            telefono: '04127654321',
-            titular: 'José Pérez',
-            cedula: 'V-7654321',
-            monto: 4050.00
-          }
-        ]
-      }
-    ]);
-
-    setRetiros([
-      { id: 1, fecha: '05/06/2026', cajeroId: 'caj-1', cajeroName: 'Carlos Mendoza', monto: 100.00, fee: 10.00, totalRecibir: 90.00, estado: 'PAGADO' },
-      { id: 2, fecha: '09/06/2026', cajeroId: 'caj-1', cajeroName: 'Carlos Mendoza', monto: 250.00, fee: 25.00, totalRecibir: 225.00, estado: 'PENDIENTE' }
-    ]);
-  };
 
   const fetchDatosSupabase = async () => {
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+
     // 0. Fetch cajeros first to map names and details
     const { data: cajerosData } = await supabase
       .from('perfiles_cajeros')
@@ -397,6 +285,13 @@ export default function App() {
         reputacion_san: c.reputacion_san || 0,
         nivel_san: c.nivel_san || 'Bronce',
       })));
+
+      if (currentSession?.user) {
+        const miPerfil = cajerosData.find((c: any) => c.id === currentSession.user.id);
+        if (miPerfil) {
+          setSaldoAcumulado(parseFloat(miPerfil.saldo_acumulado) || 0);
+        }
+      }
     }
 
     // 0.1 Fetch clientes
@@ -572,11 +467,6 @@ export default function App() {
   };
 
   const handleRegisterOperation = async (data: any) => {
-    if (isSimulationMode) {
-      triggerToast(`Operación de $${data.montoOrigen} registrada (MODO SIMULACIÓN).`);
-      return;
-    }
-
     try {
       // 1. Validar o registrar cliente
       let clienteId = '';
@@ -613,7 +503,8 @@ export default function App() {
           monto_origen: data.montoOrigen,
           monto_destino: data.montoDestino,
           tasa_venta_aplicada: data.tasaVenta,
-          estado: 'PENDIENTE'
+          estado: 'PENDIENTE',
+          cajero_origen: session?.user?.id
         })
         .select('id')
         .single();
@@ -657,11 +548,6 @@ export default function App() {
 
   const handleApproveDeposito = async (id: number, binanceRef: string, binanceTasa: number) => {
     addAuditLog(`Aprobó recarga web ID ${id} (Tasa Binance: ${binanceTasa.toFixed(4)}, Ref: ${binanceRef})`);
-    if (isSimulationMode) {
-      setDepositos(depositos.filter(d => d.id !== id));
-      triggerToast(`Recarga ${id} aprobada (MODO SIMULACIÓN).`);
-      return;
-    }
 
     const { error } = await supabase
       .from('depositos')
@@ -679,13 +565,6 @@ export default function App() {
   };
 
   const handleApproveRemesa = async (id: number, bancoRef: string, binanceRef: string, binanceTasa: number, comprobanteFile?: File) => {
-    if (isSimulationMode) {
-      setRemesas(remesas.filter(r => r.id !== id));
-      setSaldoAcumulado(prev => prev + 12.50);
-      triggerToast(`Remesa liquidada (MODO SIMULACIÓN). Ganancia: +$12.50`);
-      return;
-    }
-
     let comprobanteUrl = '';
     if (comprobanteFile) {
       const fileExt = comprobanteFile.name.split('.').pop();
@@ -710,6 +589,7 @@ export default function App() {
         referencia_venta_binance: binanceRef,
         tasa_venta_usdt: binanceTasa,
         fecha_pago: new Date().toISOString(),
+        cajero_destino: session?.user?.id,
         ...(comprobanteUrl ? { comprobante_banco_emisor: comprobanteUrl } : {})
       })
       .eq('id', id);
@@ -721,25 +601,11 @@ export default function App() {
   };
 
   const handleRequestRetiro = async (monto: number) => {
-    if (isSimulationMode) {
-      setSaldoAcumulado(prev => prev - monto);
-      const newRetiro: Retiro = {
-        id: Date.now(),
-        fecha: new Date().toLocaleDateString(),
-        monto,
-        fee: monto * 0.10,
-        totalRecibir: monto * 0.90,
-        estado: 'PENDIENTE'
-      };
-      setRetiros([newRetiro, ...retiros]);
-      triggerToast(`Retiro de $${monto} solicitado (MODO SIMULACIÓN).`);
-      return;
-    }
-
     const fee = monto * 0.10;
     const { error } = await supabase
       .from('retiros')
       .insert({
+        cajero_id: session?.user?.id,
         monto,
         fee,
         total_recibir: monto - fee,
@@ -759,21 +625,31 @@ export default function App() {
   };
 
   const simularReporteTelegram = () => {
-    const totalVolume = 150.00 + 100.00; // Mock de volumen
-    const totalGanancia = 12.50; // Mock de ganancia
-    const msg = `🤖 Bot Telegram (Resumen Diario):\n---------------------------\n🌍 Volumen Total: $${totalVolume.toFixed(2)} USD\n📈 Ganancia Neta: $${totalGanancia.toFixed(2)} USD\n👥 Cajero: Carlos Mendoza\n📍 País: Venezuela 🇻🇪\n✅ Reporte enviado al canal privado de la empresa.`;
-    triggerToast(msg);
+    if (!session) return;
+    const hoy = new Date().toLocaleDateString();
+    const pagadasHoy = remesas.filter(r => r.estado === 'PAGADO' && new Date(r.fecha).toLocaleDateString() === hoy);
+    const totalVolume = pagadasHoy.reduce((acc, r) => acc + (r.montoOrigen / (r.tasaCompra || 1)), 0);
+    const totalGanancia = pagadasHoy.reduce((acc, r) => acc + (r.gananciaCalculada || 0), 0);
+    const email = session.user.email;
+    const msg = `🤖 *Reporte Diario (Cajero)*\n---------------------------\n🌍 *Volumen Total:* $${totalVolume.toFixed(2)} USD\n📈 *Ganancia Neta:* $${totalGanancia.toFixed(2)} USD\n👥 *Cajero:* ${email}\n📍 *País:* Venezuela 🇻🇪`;
+
+    fetch(`https://api.telegram.org/bot8576377601:AAFlnEF38oYA2i1RmwAMGIHY6slsVIvat8c/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: '-5201919939', text: msg, parse_mode: 'Markdown' })
+    }).then(res => {
+      if (res.ok) triggerToast('✅ Reporte enviado a Telegram exitosamente.');
+      else triggerToast('Error enviando a Telegram (Revisa Chat ID).');
+    }).catch(e => triggerToast('Error de red enviando a Telegram.'));
   };
 
   const handleToggleSanTab = async (newValue: boolean) => {
     addAuditLog(`Modificó visibilidad del módulo Ahorro Circular SAN a: ${newValue ? 'ACTIVO' : 'INACTIVO'}`);
     setShowSanTab(newValue);
     localStorage.setItem('tc_showSanTab', String(newValue));
-    if (!isSimulationMode) {
-      await supabase
-        .from('configuracion_global')
-        .upsert({ clave: 'showSanTab', valor: String(newValue) }, { onConflict: 'clave' });
-    }
+    await supabase
+      .from('configuracion_global')
+      .upsert({ clave: 'showSanTab', valor: String(newValue) }, { onConflict: 'clave' });
     if (!newValue && activeTab === 'san') {
       setActiveTab('calculadora');
     }
@@ -783,11 +659,9 @@ export default function App() {
     addAuditLog(`Modificó visibilidad del módulo Billetera Digital a: ${newValue ? 'ACTIVO' : 'INACTIVO'}`);
     setShowWalletFeatures(newValue);
     localStorage.setItem('tc_showWalletFeatures', String(newValue));
-    if (!isSimulationMode) {
-      await supabase
-        .from('configuracion_global')
-        .upsert({ clave: 'showWalletFeatures', valor: String(newValue) }, { onConflict: 'clave' });
-    }
+    await supabase
+      .from('configuracion_global')
+      .upsert({ clave: 'showWalletFeatures', valor: String(newValue) }, { onConflict: 'clave' });
   };
 
   const handleUpdateExchangeRate = async (code: string, compra: number, venta: number) => {
@@ -803,11 +677,9 @@ export default function App() {
     setPaises(updated);
     localStorage.setItem('tc_paisesData', JSON.stringify(updated));
 
-    if (!isSimulationMode) {
-      await supabase
-        .from('configuracion_tasas')
-        .upsert({ pais_codigo: code, compra, venta }, { onConflict: 'pais_codigo' });
-    }
+    await supabase
+      .from('configuracion_tasas')
+      .upsert({ pais_codigo: code, compra, venta }, { onConflict: 'pais_codigo' });
     triggerToast(`Tasa de ${paises[code]?.nombre || code} actualizada con éxito.`);
   };
 
@@ -821,11 +693,6 @@ export default function App() {
 
   const handleCancelRemesa = async (id: number, motivo: string) => {
     addAuditLog(`Canceló remesa TRX-${id} con motivo: ${motivo}`);
-    if (isSimulationMode) {
-      setRemesas(prev => prev.map(r => r.id === id ? { ...r, estado: 'CANCELADO', motivoCancelacion: motivo } : r));
-      triggerToast(`Operación ${id} cancelada con motivo: ${motivo} (SIMULACIÓN).`);
-      return;
-    }
 
     const { error } = await supabase
       .from('remesas')
@@ -840,11 +707,6 @@ export default function App() {
 
   const handleRejectDeposito = async (id: number) => {
     addAuditLog(`Rechazó la solicitud de recarga web ID ${id}`);
-    if (isSimulationMode) {
-      setDepositos(prev => prev.map(d => d.id === id ? { ...d, estado: 'CANCELADO' } : d));
-      triggerToast(`Depósito ${id} rechazado (SIMULACIÓN).`);
-      return;
-    }
 
     const { error } = await supabase
       .from('depositos')
@@ -859,15 +721,6 @@ export default function App() {
 
   const handleApproveRetiro = async (id: number) => {
     addAuditLog(`Aprobó solicitud de retiro de caja chica ID ${id}`);
-    if (isSimulationMode) {
-      setRetiros(prev => prev.map(r => r.id === id ? { ...r, estado: 'PAGADO' } : r));
-      const ret = retiros.find(r => r.id === id);
-      if (ret) {
-        setSaldoEmpresa(prev => prev + ret.fee);
-      }
-      triggerToast(`Retiro ${id} pagado y aprobado (SIMULACIÓN).`);
-      return;
-    }
 
     const { error } = await supabase
       .from('retiros')
@@ -882,17 +735,6 @@ export default function App() {
 
   const handleRejectRetiro = async (id: number) => {
     addAuditLog(`Rechazó solicitud de retiro de caja chica ID ${id} (Fondos devueltos al cajero)`);
-    if (isSimulationMode) {
-      const ret = retiros.find(r => r.id === id);
-      if (ret) {
-        if (ret.cajeroId === 'caj-1') {
-          setSaldoAcumulado(prev => prev + ret.monto);
-        }
-        setRetiros(prev => prev.map(r => r.id === id ? { ...r, estado: 'RECHAZADO' } : r));
-      }
-      triggerToast(`Retiro ${id} rechazado. Saldo reembolsado (SIMULACIÓN).`);
-      return;
-    }
 
     try {
       const { data: retData } = await supabase
@@ -941,22 +783,13 @@ export default function App() {
   }, [remesas, cajeroPais]);
 
   const cashierRetiros = useMemo(() => {
-    return retiros.filter(rt => rt.cajeroId === 'caj-1');
+    return retiros.filter(rt => rt.cajeroId === session?.user?.id);
   }, [retiros]);
 
   const pendingNotifsCount = pendingDepositos.length + pendingRemesas.length;
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans select-none overflow-x-hidden md:py-6 justify-center items-center">
-      {/* Banner de Modo Simulación */}
-      {isSimulationMode && (
-        <div className="w-full max-w-4xl bg-amber-500/10 border border-amber-500/30 text-amber-300 px-6 py-2.5 md:rounded-xl mb-4 text-xs font-bold flex items-center justify-between gap-4">
-          <span className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-400" />
-            Modo Simulación Activo. Configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en tu archivo .env.local para conectar la base de datos real.
-          </span>
-        </div>
-      )}
 
       {/* Toast Notificación */}
       {showNotificationToast && (
@@ -972,7 +805,34 @@ export default function App() {
       )}
 
       {/* Contenedor Principal / Admin Workspace */}
-      {isAdminMode ? (
+      {!session ? (
+        <div className="w-full max-w-sm bg-slate-950 p-8 rounded-3xl border border-slate-800 shadow-2xl">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-indigo-600 rounded-2xl mx-auto flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-indigo-600/30 mb-4">TC</div>
+            <h1 className="text-2xl font-black text-white uppercase tracking-wide">TransferCash</h1>
+            <p className="text-slate-400 text-sm mt-2">Acceso de Cajeros</p>
+          </div>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            setAuthLoading(true);
+            const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+            if (error) triggerToast(`Error: ${error.message}`);
+            setAuthLoading(false);
+          }} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">Correo Electrónico</label>
+              <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">Contraseña</label>
+              <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500" />
+            </div>
+            <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition mt-4 shadow-lg shadow-indigo-600/20">
+              {authLoading ? 'Verificando...' : 'Iniciar Sesión'}
+            </button>
+          </form>
+        </div>
+      ) : isAdminMode ? (
         <AdminWorkspace
           remesas={remesas}
           depositos={depositos}
@@ -1033,7 +893,7 @@ export default function App() {
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Mi Caja Chica</span>
                 <span className="text-sm font-black text-indigo-400">${saldoAcumulado.toFixed(2)} USD</span>
               </div>
-              <button className="text-slate-400 hover:text-red-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900">
+              <button onClick={() => supabase.auth.signOut()} title="Cerrar Sesión" className="text-slate-400 hover:text-red-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900">
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
@@ -1073,6 +933,48 @@ export default function App() {
                 grupos={gruposSan}
                 onPayAporte={handlePayAporte}
               />
+            )}
+            {activeTab === 'historial' && (
+              <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+                <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+                  <div className="bg-indigo-600 text-white px-6 py-4">
+                    <h2 className="font-bold text-lg">📋 Historial de Transacciones</h2>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold text-xs uppercase">
+                          <th className="p-4">Fecha / Cliente</th>
+                          <th className="p-4">Ruta / Monto</th>
+                          <th className="p-4 text-center">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {remesas.filter(r => r.estado !== 'PENDIENTE').map(rem => (
+                          <tr key={rem.id} className="border-b border-slate-100 hover:bg-slate-50 transition">
+                            <td className="p-4 text-xs">
+                              <span className="font-bold text-slate-900 block">{rem.cliente}</span>
+                              <span className="text-slate-500">{rem.fecha}</span>
+                            </td>
+                            <td className="p-4 text-xs">
+                              <span className="font-bold text-slate-800">{rem.origen} ➔ {rem.destino}</span>
+                              <span className="block text-slate-500">Monto: {rem.simboloDestino} {rem.montoDestino.toFixed(2)}</span>
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${rem.estado === 'PAGADO' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                {rem.estado}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {remesas.filter(r => r.estado !== 'PENDIENTE').length === 0 && (
+                          <tr><td colSpan={3} className="text-center p-8 text-slate-500">No hay transacciones en el historial.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             )}
           </main>
 
@@ -1120,6 +1022,15 @@ export default function App() {
                 <span className="text-[10px] uppercase tracking-wider font-semibold">Ahorro SAN</span>
               </button>
             )}
+
+            <button
+              onClick={() => setActiveTab('historial')}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${activeTab === 'historial' ? 'text-indigo-400 font-bold' : 'text-slate-500 hover:text-slate-300'
+                }`}
+            >
+              <span className="text-lg">📋</span>
+              <span className="text-[10px] uppercase tracking-wider font-semibold">Historial</span>
+            </button>
           </nav>
         </div>
       )}

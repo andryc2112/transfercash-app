@@ -537,7 +537,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                   return (
                     <button key={code} onClick={() => setSelectedPaisPizarra(code)} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col items-center text-center justify-center shadow-inner hover:bg-slate-800 transition cursor-pointer group">
                       <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">{info.flag}</span>
-                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Desde {info.nombre}</span>
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Hacia {info.nombre}</span>
                       <span className="text-[10px] bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-md font-bold mt-1 group-hover:bg-indigo-500/20 transition">
                         Ver Tasas ➔
                       </span>
@@ -1516,7 +1516,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
           <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
             <div className="bg-slate-900 border-b border-slate-800 p-5 flex justify-between items-center">
               <h3 className="font-extrabold text-sm uppercase tracking-wider text-emerald-400 flex items-center gap-2">
-                <span className="text-xl">{paises[selectedPaisPizarra].flag}</span> Tasas desde {paises[selectedPaisPizarra].nombre}
+                <span className="text-xl">{paises[selectedPaisPizarra].flag}</span> Enviar a {paises[selectedPaisPizarra].nombre}
               </h3>
               <button
                 onClick={() => setSelectedPaisPizarra(null)}
@@ -1529,22 +1529,22 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               <p className="text-xs text-slate-400 font-bold mb-4 text-center">
                 Tasas de cambio reales para el cliente <br />(con el margen de ganancia del {margenGlobal}% ya aplicado).
               </p>
-              {Object.entries(paises).map(([destCode, destInfo]) => {
-                if (destCode === selectedPaisPizarra || destCode === 'US' || destCode === 'PA') return null;
+              {Object.entries(paises).map(([orgCode, orgInfo]) => {
+                if (orgCode === selectedPaisPizarra || orgCode === 'US' || orgCode === 'PA') return null;
 
-                const tCompraOrg = paises[selectedPaisPizarra].compra || 1;
-                const tVentaDest = destInfo.venta || 1;
+                const tCompraOrg = orgInfo.compra || 1;
+                const tVentaDest = paises[selectedPaisPizarra].venta || 1;
                 const tasaCruzada = (1 / tCompraOrg) * tVentaDest * (1 - margenGlobal / 100);
 
                 return (
-                  <div key={destCode} className="flex justify-between items-center p-3 bg-slate-900/50 border border-slate-800 rounded-xl hover:bg-slate-800 transition">
+                  <div key={orgCode} className="flex justify-between items-center p-3 bg-slate-900/50 border border-slate-800 rounded-xl hover:bg-slate-800 transition">
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">{destInfo.flag}</span>
-                      <span className="font-bold text-slate-300 text-xs">Hacia {destInfo.nombre}</span>
+                      <span className="text-2xl">{orgInfo.flag}</span>
+                      <span className="font-bold text-slate-300 text-xs">Desde {orgInfo.nombre}</span>
                     </div>
                     <div className="text-right">
                       <span className="block text-emerald-400 font-black text-sm">
-                        1 {paises[selectedPaisPizarra].simbolo} = {tasaCruzada.toFixed(destCode === 'CO' || destCode === 'CL' || destCode === 'AR' ? 2 : 4)} {destInfo.simbolo}
+                        1 {orgInfo.simbolo} = {tasaCruzada.toFixed(selectedPaisPizarra === 'CO' || selectedPaisPizarra === 'CL' || selectedPaisPizarra === 'AR' ? 2 : 4)} {paises[selectedPaisPizarra].simbolo}
                       </span>
                     </div>
                   </div>

@@ -20,6 +20,7 @@ interface Remesa {
   cliente: string;
   cedula: string;
   fecha: string;
+  tasaCompra?: number;
   beneficiarios: {
     banco: string;
     cuenta: string;
@@ -122,6 +123,26 @@ export const TablaPendientes: React.FC<TablaPendientesProps> = ({
       setRemRefBinanceVenta('');
       setRemTasaVentaUsdt('1.0');
       setRemComprobanteFile(undefined);
+    }
+  };
+
+  const getProfitStatus = () => {
+    if (!selectedRemesa) return null;
+    const tCompra = selectedRemesa.tasaCompra || 1.0;
+    const tVenta = parseFloat(remTasaVentaUsdt) || 0;
+    if (tVenta <= 0) return null;
+
+    const usdIn = tCompra > 0 ? selectedRemesa.montoOrigen / tCompra : 0;
+    const usdOut = selectedRemesa.montoDestino / tVenta;
+    const profit = usdIn - usdOut;
+    const profitPct = usdIn > 0 ? (profit / usdIn) * 100 : 0;
+
+    if (profit < 0) {
+      return <div className="text-red-600 text-[10px] font-bold mt-1.5 bg-red-50 p-2 rounded-lg border border-red-200 shadow-sm">⚠️ ALERTA: Esta tasa genera una PÉRDIDA de ${Math.abs(profit).toFixed(2)} USD ({profitPct.toFixed(1)}%)</div>;
+    } else if (profitPct < 2) {
+      return <div className="text-amber-600 text-[10px] font-bold mt-1.5 bg-amber-50 p-2 rounded-lg border border-amber-200 shadow-sm">⚠️ ATENCIÓN: Rentabilidad baja. Ganancia: ${profit.toFixed(2)} USD ({profitPct.toFixed(1)}%)</div>;
+    } else {
+      return <div className="text-emerald-600 text-[10px] font-bold mt-1.5 bg-emerald-50 p-2 rounded-lg border border-emerald-200 shadow-sm">✅ Rentabilidad saludable: +${profit.toFixed(2)} USD ({profitPct.toFixed(1)}%)</div>;
     }
   };
 
@@ -411,6 +432,7 @@ export const TablaPendientes: React.FC<TablaPendientesProps> = ({
                     onChange={(e) => setRemTasaVentaUsdt(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
+                  {getProfitStatus()}
                 </div>
               </div>
               <div className="space-y-1">

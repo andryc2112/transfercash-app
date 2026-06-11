@@ -135,6 +135,26 @@ export default function App() {
 
   // Fluctuar ligeramente las tasas de Binance para simular realismo en tiempo real
   useEffect(() => {
+    // ========================================================================
+    // 🚀 API BINANCE P2P (Requiere un servidor puente/proxy para evitar CORS)
+    // ========================================================================
+    // Binance no permite consultar P2P directamente desde el navegador (Vercel).
+    // Debes apuntar a un archivo en tu WordPress o Supabase que consulte a Binance.
+    //
+    // const fetchBinanceP2P = async () => {
+    //   try {
+    //     const res = await fetch('https://tu-dominio.com/wp-json/tc/v1/binance-p2p'); // <-- TU PROXY
+    //     const tasas = await res.json(); 
+    //     
+    //     setBinanceMarketRates(prev => ({ 
+    //       ...prev, 
+    //       VE: { compra: tasas.VES.compra, venta: tasas.VES.venta },
+    //       CO: { compra: tasas.COP.compra, venta: tasas.COP.venta }
+    //     }));
+    //   } catch (error) { console.error(error); }
+    // };
+    // setInterval(fetchBinanceP2P, 60000); // Consultar cada 60 segundos
+
     const interval = setInterval(() => {
       setBinanceMarketRates(prev => {
         const updated = { ...prev };

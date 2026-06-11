@@ -308,6 +308,7 @@ export default function App() {
         saldo_acumulado: parseFloat(c.saldo_acumulado) || 0,
         reputacion_san: c.reputacion_san || 0,
         nivel_san: c.nivel_san || 'Bronce',
+        estado: c.estado || 'PENDIENTE',
       })));
 
       if (currentSession?.user) {
@@ -824,6 +825,18 @@ export default function App() {
     }
   };
 
+  const handleToggleEstadoCajero = async (id: string, nuevoEstado: string) => {
+    addAuditLog(`Cambió el estado de acceso del cajero a ${nuevoEstado}`);
+    const { error } = await supabase
+      .from('perfiles_cajeros')
+      .update({ estado: nuevoEstado })
+      .eq('id', id);
+    if (!error) {
+      triggerToast(`Estado del cajero actualizado a ${nuevoEstado}.`);
+      fetchDatosSupabase();
+    }
+  };
+
   const pendingDepositos = useMemo(() => {
     return depositos.filter(d => d.estado === 'PENDIENTE');
   }, [depositos]);
@@ -989,8 +1002,18 @@ export default function App() {
           onApproveRetiro={handleApproveRetiro}
           onRejectRetiro={handleRejectRetiro}
           onCancelRemesa={handleCancelRemesa}
+          onToggleEstadoCajero={handleToggleEstadoCajero}
           onClose={() => setIsAdminMode(false)}
         />
+      ) : !adminEmails.includes(session?.user?.email) && cajeros.find(c => c.id === session?.user?.id)?.estado !== 'ACTIVO' ? (
+        <div className="w-full max-w-md bg-slate-950 p-8 rounded-3xl border border-slate-800 shadow-2xl text-center">
+          <div className="text-5xl mb-4">⏳</div>
+          <h2 className="text-xl font-bold text-white mb-2">Cuenta en Revisión</h2>
+          <p className="text-slate-400 text-sm mb-6">Tu perfil está a la espera de ser aprobado por un administrador para que puedas comenzar a operar.</p>
+          <button onClick={() => supabase.auth.signOut()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-xl transition shadow-lg shadow-indigo-600/20 w-full">
+            Cerrar Sesión
+          </button>
+        </div>
       ) : (
         <div className="w-full max-w-4xl bg-slate-950 md:rounded-3xl shadow-2xl md:border md:border-slate-800/80 flex flex-col md:h-[90vh] overflow-hidden min-h-screen md:min-h-0">
 

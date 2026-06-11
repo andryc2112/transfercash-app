@@ -29,6 +29,7 @@ export interface CajeroPerfil {
   saldo_acumulado: number;
   reputacion_san: number;
   nivel_san: string;
+  estado?: string;
 }
 
 interface AdminWorkspaceProps {
@@ -57,6 +58,7 @@ interface AdminWorkspaceProps {
   onApproveRetiro: (id: number) => void;
   onRejectRetiro: (id: number) => void;
   onCancelRemesa: (id: number, motivo: string) => void;
+  onToggleEstadoCajero: (id: string, estado: string) => void;
   onClose: () => void;
 }
 
@@ -86,6 +88,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   onApproveRetiro,
   onRejectRetiro,
   onCancelRemesa,
+  onToggleEstadoCajero,
   onClose
 }) => {
   const [activeTab, setActiveTab] = useState<'resumen' | 'operaciones' | 'clientes' | 'operadores' | 'retiros' | 'recargas' | 'auditoria' | 'ajustes'>('resumen');
@@ -816,6 +819,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                     <th className="p-4">País Asignado</th>
                     <th className="p-4">Saldo Caja Chica</th>
                     <th className="p-4 text-right">Comisión Generada (Histórico)</th>
+                    <th className="p-4 text-center">Acceso</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40">
@@ -838,6 +842,13 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                         </td>
                         <td className="p-4 text-right font-black text-amber-500">
                           ${comisionesHistoricas.toFixed(2)}
+                        </td>
+                        <td className="p-4 text-center">
+                          {c.estado === 'ACTIVO' ? (
+                            <button onClick={() => onToggleEstadoCajero(c.id, 'PENDIENTE')} className="bg-emerald-500/10 text-emerald-400 border border-emerald-950 px-3 py-1 rounded-full text-[10px] font-black uppercase hover:bg-emerald-500/20 transition">Activo ✅</button>
+                          ) : (
+                            <button onClick={() => onToggleEstadoCajero(c.id, 'ACTIVO')} className="bg-amber-500/10 text-amber-400 border border-amber-950 px-3 py-1 rounded-full text-[10px] font-black uppercase hover:bg-amber-500/20 transition">Aprobar ⏳</button>
+                          )}
                         </td>
                       </tr>
                     );

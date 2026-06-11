@@ -34,7 +34,7 @@ interface TablaPendientesProps {
   depositos: Deposito[];
   remesas: Remesa[];
   onApproveDeposito: (id: number, binanceRef: string, BinanceTasa: number) => void;
-  onApproveRemesa: (id: number, bancoRef: string, binanceRef: string, binanceTasa: number, comprobantePagoUrl?: string) => void;
+  onApproveRemesa: (id: number, bancoRef: string, binanceRef: string, binanceTasa: number, comprobantePagoFile?: File) => void;
   showWallet?: boolean;
 }
 
@@ -85,16 +85,11 @@ export const TablaPendientes: React.FC<TablaPendientesProps> = ({
   const [remRefEmisor, setRemRefEmisor] = useState('');
   const [remTasaVentaUsdt, setRemTasaVentaUsdt] = useState('1.0');
   const [remRefBinanceVenta, setRemRefBinanceVenta] = useState('');
-  const [remComprobantePagoUrl, setRemComprobantePagoUrl] = useState('');
+  const [remComprobanteFile, setRemComprobanteFile] = useState<File | undefined>(undefined);
 
   const handleRemComprobanteFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setRemComprobantePagoUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setRemComprobanteFile(e.target.files[0]);
     }
   };
 
@@ -120,13 +115,13 @@ export const TablaPendientes: React.FC<TablaPendientesProps> = ({
         remRefEmisor,
         remRefBinanceVenta,
         parseFloat(remTasaVentaUsdt) || 1.0,
-        remComprobantePagoUrl
+        remComprobanteFile
       );
       setSelectedRemesa(null);
       setRemRefEmisor('');
       setRemRefBinanceVenta('');
       setRemTasaVentaUsdt('1.0');
-      setRemComprobantePagoUrl('');
+      setRemComprobanteFile(undefined);
     }
   };
 
@@ -205,9 +200,9 @@ export const TablaPendientes: React.FC<TablaPendientesProps> = ({
                         <span>💸</span>
                         <span>Pagar</span>
                       </div>
-                      
+
                       {/* Swipable Row Content */}
-                      <div 
+                      <div
                         onTouchStart={(e) => handleTouchStart(e, rem.id)}
                         onTouchMove={handleTouchMove}
                         onTouchEnd={() => handleTouchEnd(rem)}
@@ -225,7 +220,7 @@ export const TablaPendientes: React.FC<TablaPendientesProps> = ({
                           </div>
                           <span className="text-[10px] text-slate-400 block mt-1">{rem.fecha}</span>
                         </div>
-                        
+
                         <div className="text-right">
                           <span className="font-black text-indigo-600 text-base block">
                             {rem.simboloDestino} {rem.montoDestino.toFixed(2)}
@@ -427,6 +422,16 @@ export const TablaPendientes: React.FC<TablaPendientesProps> = ({
                   onChange={(e) => setRemRefBinanceVenta(e.target.value)}
                   placeholder="Ej: Binance Order ID de venta"
                   className="w-full rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Capture / Comprobante (Opcional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleRemComprobanteFileChange}
+                  className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
 

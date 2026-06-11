@@ -509,20 +509,22 @@ export default function App() {
     }, 4500);
   };
 
-  const handleRegisterOperation = async (data: any) => {
+  const handleRegisterOperation = async (data: any): Promise<boolean> => {
     try {
       // 1. Validar o registrar cliente
-      let clienteId = '';
-      const { data: cliExist } = await supabase
+      let clienteId: string | null = null;
+      const { data: cliExist, error: searchErr } = await supabase
         .from('clientes')
         .select('id')
         .eq('cedula_dni', data.clienteDoc)
-        .single();
+        .maybeSingle();
+
+      if (searchErr) throw new Error(`Error validando cliente: ${searchErr.message}`);
 
       if (cliExist) {
         clienteId = cliExist.id;
       } else {
-        const { data: newCli } = await supabase
+        const { data: newCli, error: cliErr } = await supabase
           .from('clientes')
           .insert({
             nombre: data.clienteNombre,
@@ -533,6 +535,7 @@ export default function App() {
           })
           .select('id')
           .single();
+        if (cliErr) throw new Error(`Fallo guardando cliente: ${cliErr.message}`);
         if (newCli) clienteId = newCli.id;
       }
 
@@ -552,7 +555,7 @@ export default function App() {
         .select('id')
         .single();
 
-      if (remError) throw remError;
+      if (remError) throw new Error(`Fallo guardando remesa: ${remError.message}`);
 
       // 3. Insertar Beneficiarios en lote
       if (newRemesa) {
@@ -566,12 +569,16 @@ export default function App() {
           monto: parseFloat(b.monto)
         }));
 
-        await supabase.from('remesas_beneficiarios').insert(benPayloads);
+        const { error: benError } = await supabase.from('remesas_beneficiarios').insert(benPayloads);
+        if (benError) throw new Error(`Fallo guardando cuentas destino: ${benError.message}`);
         triggerToast('Operación registrada exitosamente en Supabase.');
         fetchDatosSupabase();
+        return true;
       }
+      return false;
     } catch (error: any) {
-      triggerToast(`Error al registrar operación: ${error.message}`);
+      triggerToast(`❌ ${error.message}`);
+      return false;
     }
   };
 
@@ -710,8 +717,7 @@ export default function App() {
       .upsert({ clave: 'showWalletFeatures', valor: String(newValue) }, { onConflict: 'clave' });
   };
 
-  const handleUpdateExchangeRate = async (code: string, compra: number, venta: number) => {
-    addAuditLog(`Actualizó tasa manual de ${paises[code]?.nombre || code} a Compra: ${compra}, Venta: ${venta}`);
+  const handleUpdateExchangeRate = (code: string, compra: number, venta: number) => {
     const updated = {
       ...paises,
       [code]: {
@@ -721,19 +727,31 @@ export default function App() {
       }
     };
     setPaises(updated);
-    localStorage.setItem('tc_paisesData', JSON.stringify(updated));
+  };
 
-    await supabase
+  const handleSaveExchangeRate = async (code: string) => {
+    const info = paises[code];
+    addAuditLog(`Guardó tasa manual de ${info.nombre} a Compra: ${info.compra}, Venta: ${info.venta}`);
+    localStorage.setItem('tc_paisesData', JSON.stringify(paises));
+
+    const { error } = await supabase
       .from('configuracion_tasas')
-      .upsert({ pais_codigo: code, compra, venta }, { onConflict: 'pais_codigo' });
-    triggerToast(`Tasa de ${paises[code]?.nombre || code} actualizada con éxito.`);
+      .upsert({ pais_codigo: code, compra: info.compra, venta: info.venta }, { onConflict: 'pais_codigo' });
+
+    if (error) triggerToast(`Error de Servidor: ${error.message}`);
+    else triggerToast(`Tasa de ${paises[code]?.nombre || code} guardada en el servidor con éxito.`);
   };
 
   const handleUpdateMargenGlobal = (newMargin: number) => {
-    addAuditLog(`Actualizó el margen global a: ${newMargin}%`);
     setMargenGlobal(newMargin);
-    localStorage.setItem('tc_margenGlobal', String(newMargin));
-    triggerToast(`Margen global actualizado a ${newMargin}%`);
+  };
+
+  const handleSaveMargenGlobal = async () => {
+    addAuditLog(`Actualizó y guardó el margen global a: ${margenGlobal}%`);
+    localStorage.setItem('tc_margenGlobal', String(margenGlobal));
+    const { error } = await supabase.from('configuracion_global').upsert({ clave: 'tc_margen_global', valor: String(margenGlobal) }, { onConflict: 'clave' });
+    if (error) triggerToast(`Error de Servidor: ${error.message}`);
+    else triggerToast(`Margen global guardado exitosamente en el servidor.`);
   };
 
   const handleUpdateAdminEmails = async (emails: string[]) => {
@@ -843,6 +861,26 @@ export default function App() {
       .eq('id', id);
     if (!error) {
       triggerToast(`Estado del cajero actualizado a ${nuevoEstado}.`);
+      fetchDatosSupabase();
+    }
+  };
+
+  const handleEditCajero = async (id: string, data: Partial<CajeroPerfil>) => {
+    addAuditLog(`Editó los datos del cajero ${data.nombre}`);
+    const { error } = await supabase
+      .from('perfiles_cajeros')
+      .update({
+        nombre: data.nombre,
+        pais_operacion: data.pais_operacion,
+        banco_nombre: data.banco_nombre,
+        banco_cuenta: data.banco_cuenta,
+        banco_titular: data.banco_titular,
+        banco_cedula: data.banco_cedula,
+        binance_wallet: data.binance_wallet
+      })
+      .eq('id', id);
+    if (!error) {
+      triggerToast(`Datos del cajero ${data.nombre} actualizados exitosamente.`);
       fetchDatosSupabase();
     }
   };
@@ -1007,15 +1045,18 @@ export default function App() {
           onUpdateTelegramChatId={handleUpdateTelegramChatId}
           onUpdateAdminEmails={handleUpdateAdminEmails}
           onUpdateMargenGlobal={handleUpdateMargenGlobal}
+          onSaveMargenGlobal={handleSaveMargenGlobal}
           onToggleSanTab={handleToggleSanTab}
           onToggleWalletFeatures={handleToggleWalletFeatures}
           onUpdateExchangeRate={handleUpdateExchangeRate}
+          onSaveExchangeRate={handleSaveExchangeRate}
           onApproveDeposito={handleApproveDeposito}
           onRejectDeposito={handleRejectDeposito}
           onApproveRetiro={handleApproveRetiro}
           onRejectRetiro={handleRejectRetiro}
           onCancelRemesa={handleCancelRemesa}
           onToggleEstadoCajero={handleToggleEstadoCajero}
+          onEditCajero={handleEditCajero}
           onClose={() => setIsAdminMode(false)}
         />
       ) : !adminEmails.includes(session?.user?.email) && cajeros.find(c => c.id === session?.user?.id)?.estado !== 'ACTIVO' ? (

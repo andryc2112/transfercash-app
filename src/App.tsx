@@ -675,7 +675,9 @@ export default function App() {
         .from('comprobantes')
         .upload(`pagos/${fileName}`, comprobanteFile);
 
-      if (uploadData) {
+      if (uploadError) {
+        triggerToast(`Error subiendo la imagen: ${uploadError.message}`);
+      } else if (uploadData) {
         const { data: publicUrlData } = supabase.storage.from('comprobantes').getPublicUrl(`pagos/${fileName}`);
         comprobanteUrl = publicUrlData.publicUrl;
       }

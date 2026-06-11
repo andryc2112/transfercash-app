@@ -195,13 +195,14 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: '-5171951585',
+                chat_id: '-1005171951585',
                 text,
                 parse_mode: 'Markdown'
               })
-            }).then(() => {
-              setPaisesConAlertaEnviada(prev => ({ ...prev, [code]: true }));
-            }).catch(e => console.error('Error enviando alerta de tasa a Telegram:', e));
+            }).then(async res => {
+              if (res.ok) setPaisesConAlertaEnviada(prev => ({ ...prev, [code]: true }));
+              else console.error('Telegram Error:', await res.json());
+            }).catch(e => console.error('Error de red enviando alerta:', e));
           } else if (diff <= 1.5 && yaEnviada) {
             const text = `✅ *RESOLUCIÓN: TASA ALINEADA EN ${info.flag} ${info.nombre}* \n\n` +
               `• La tasa manual (${info.venta.toFixed(2)}) ya se encuentra alineada con Binance P2P (${marketVal.toFixed(2)} ${info.simbolo}) con un desfase menor al 1.5%.`;
@@ -210,13 +211,14 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: '-5171951585',
+                chat_id: '-1005171951585',
                 text,
                 parse_mode: 'Markdown'
               })
-            }).then(() => {
-              setPaisesConAlertaEnviada(prev => ({ ...prev, [code]: false }));
-            }).catch(e => console.error('Error enviando resolución de tasa a Telegram:', e));
+            }).then(async res => {
+              if (res.ok) setPaisesConAlertaEnviada(prev => ({ ...prev, [code]: false }));
+              else console.error('Telegram Error:', await res.json());
+            }).catch(e => console.error('Error de red enviando resolución:', e));
           }
         }
       });
@@ -643,10 +645,13 @@ export default function App() {
     fetch(`https://api.telegram.org/bot8576377601:AAFlnEF38oYA2i1RmwAMGIHY6slsVIvat8c/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: '-5171951585', text: msg, parse_mode: 'Markdown' })
-    }).then(res => {
+      body: JSON.stringify({ chat_id: '-1005171951585', text: msg, parse_mode: 'Markdown' })
+    }).then(async res => {
       if (res.ok) triggerToast('✅ Reporte enviado a Telegram exitosamente.');
-      else triggerToast('Error enviando a Telegram (Revisa Chat ID).');
+      else {
+        const err = await res.json();
+        triggerToast(`Error Telegram: ${err.description}`);
+      }
     }).catch(() => triggerToast('Error de red enviando a Telegram.'));
   };
 

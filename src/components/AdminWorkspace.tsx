@@ -95,6 +95,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [adminInput, setAdminInput] = useState(adminEmails.join(', '));
+  const [selectedPaisPizarra, setSelectedPaisPizarra] = useState<string | null>(null);
 
   const globalMargin = margenGlobal;
 
@@ -330,8 +331,8 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={`py-2 px-4 rounded-xl text-xs font-extrabold uppercase tracking-wider transition ${activeTab === tab.id
-                ? 'bg-slate-950 text-indigo-400 border border-slate-800/80'
-                : 'text-slate-500 hover:text-slate-300'
+              ? 'bg-slate-950 text-indigo-400 border border-slate-800/80'
+              : 'text-slate-500 hover:text-slate-300'
               }`}
           >
             {tab.label}
@@ -528,15 +529,14 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                 {Object.entries(paises).map(([code, info]) => {
                   if (code === 'PA' || code === 'US' || code === 'ZI' || code === 'WA' || code === 'AI') return null;
-                  const sugerida = info.venta * (1 - margenGlobal / 100);
                   return (
-                    <div key={code} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col items-center text-center justify-center shadow-inner hover:bg-slate-800/50 transition cursor-default">
-                      <span className="text-3xl mb-2">{info.flag}</span>
-                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Hacia {info.nombre}</span>
-                      <span className="text-xl font-black text-emerald-400 block">
-                        {sugerida.toFixed(code === 'CO' || code === 'CL' || code === 'AR' ? 0 : 2)} <small className="text-[10px] text-slate-500 font-bold ml-0.5">{info.simbolo}</small>
+                    <button key={code} onClick={() => setSelectedPaisPizarra(code)} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col items-center text-center justify-center shadow-inner hover:bg-slate-800 transition cursor-pointer group">
+                      <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">{info.flag}</span>
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Desde {info.nombre}</span>
+                      <span className="text-[10px] bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-md font-bold mt-1 group-hover:bg-indigo-500/20 transition">
+                        Ver Tasas ➔
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -709,10 +709,10 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                           </td>
                           <td className="p-4">
                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${rem.estado === 'PAGADO'
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950'
-                                : rem.estado === 'CANCELADO'
-                                  ? 'bg-red-500/10 text-red-400 border border-red-950'
-                                  : 'bg-amber-500/10 text-amber-400 border border-amber-950'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950'
+                              : rem.estado === 'CANCELADO'
+                                ? 'bg-red-500/10 text-red-400 border border-red-950'
+                                : 'bg-amber-500/10 text-amber-400 border border-amber-950'
                               }`}>
                               {rem.estado}
                             </span>
@@ -882,10 +882,10 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                         <td className="p-4 text-emerald-400 font-black">${rt.totalRecibir.toFixed(2)}</td>
                         <td className="p-4">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${rt.estado === 'PAGADO'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950'
-                              : rt.estado === 'RECHAZADO'
-                                ? 'bg-red-500/10 text-red-400 border border-red-950'
-                                : 'bg-amber-500/10 text-amber-400 border border-amber-950'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950'
+                            : rt.estado === 'RECHAZADO'
+                              ? 'bg-red-500/10 text-red-400 border border-red-950'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-950'
                             }`}>
                             {rt.estado}
                           </span>
@@ -971,10 +971,10 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                       </td>
                       <td className="p-4">
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${dep.estado === 'PAGADO'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950'
-                            : dep.estado === 'CANCELADO'
-                              ? 'bg-red-500/10 text-red-400 border border-red-950'
-                              : 'bg-amber-500/10 text-amber-400 border border-amber-950'
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950'
+                          : dep.estado === 'CANCELADO'
+                            ? 'bg-red-500/10 text-red-400 border border-red-950'
+                            : 'bg-amber-500/10 text-amber-400 border border-amber-950'
                           }`}>
                           {dep.estado}
                         </span>
@@ -1286,10 +1286,10 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                   <p><strong>Cajero:</strong> {selectedTracking.cajeroDestino || 'N/A'}</p>
                   <p><strong>Estado:</strong>{' '}
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${selectedTracking.estado === 'PAGADO'
-                        ? 'bg-emerald-500/10 text-emerald-400'
-                        : selectedTracking.estado === 'CANCELADO'
-                          ? 'bg-red-500/10 text-red-400'
-                          : 'bg-amber-500/10 text-amber-400'
+                      ? 'bg-emerald-500/10 text-emerald-400'
+                      : selectedTracking.estado === 'CANCELADO'
+                        ? 'bg-red-500/10 text-red-400'
+                        : 'bg-amber-500/10 text-amber-400'
                       }`}>
                       {selectedTracking.estado}
                     </span>
@@ -1479,6 +1479,56 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PIZARRA DE TASAS CRUZADAS DETALLADA */}
+      {selectedPaisPizarra && paises[selectedPaisPizarra] && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+            <div className="bg-slate-900 border-b border-slate-800 p-5 flex justify-between items-center">
+              <h3 className="font-extrabold text-sm uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                <span className="text-xl">{paises[selectedPaisPizarra].flag}</span> Tasas desde {paises[selectedPaisPizarra].nombre}
+              </h3>
+              <button
+                onClick={() => setSelectedPaisPizarra(null)}
+                className="text-slate-400 hover:text-white text-2xl font-bold transition"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto space-y-3 flex-grow scrollbar-none">
+              <p className="text-xs text-slate-400 font-bold mb-4 text-center">
+                Tasas de cambio reales para el cliente <br />(con el margen de ganancia del {margenGlobal}% ya aplicado).
+              </p>
+              {Object.entries(paises).map(([destCode, destInfo]) => {
+                if (destCode === selectedPaisPizarra || destCode === 'PA' || destCode === 'US' || destCode === 'ZI' || destCode === 'WA' || destCode === 'AI') return null;
+
+                const tCompraOrg = paises[selectedPaisPizarra].compra || 1;
+                const tVentaDest = destInfo.venta || 1;
+                const tasaCruzada = (1 / tCompraOrg) * tVentaDest * (1 - margenGlobal / 100);
+
+                return (
+                  <div key={destCode} className="flex justify-between items-center p-3 bg-slate-900/50 border border-slate-800 rounded-xl hover:bg-slate-800 transition">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{destInfo.flag}</span>
+                      <span className="font-bold text-slate-300 text-xs">Hacia {destInfo.nombre}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-emerald-400 font-black text-sm">
+                        1 {paises[selectedPaisPizarra].simbolo} = {tasaCruzada.toFixed(destCode === 'CO' || destCode === 'CL' || destCode === 'AR' ? 2 : 4)} {destInfo.simbolo}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="bg-slate-900 border-t border-slate-800 p-4 flex justify-end">
+              <button onClick={() => setSelectedPaisPizarra(null)} className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold uppercase transition">
+                Cerrar Pizarra
+              </button>
+            </div>
           </div>
         </div>
       )}

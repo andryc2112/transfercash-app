@@ -451,6 +451,7 @@ export const GeneradorPlantilla: React.FC<GeneradorPlantillaProps> = ({
               )}
             </div>
           </div>
+        </div>
       )}
 
           {/* Preview del Canvas */}

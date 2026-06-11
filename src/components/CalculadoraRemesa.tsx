@@ -43,7 +43,8 @@ export const bancosDB: Record<string, string[]> = {
 };
 
 interface CalculadoraRemesaProps {
-  onRegisterOperation?: (data: any) => void;
+  onRegisterOperation?: (data: any) => Promise<boolean>;
+  onBuscarCliente?: (cedula: string) => Promise<any>;
   showWallet?: boolean;
   paisesData?: Record<string, PaisData>;
   margen?: number;
@@ -52,6 +53,7 @@ interface CalculadoraRemesaProps {
 
 export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
   onRegisterOperation,
+  onBuscarCliente,
   showWallet = true,
   paisesData = defaultPaisesData,
   margen = 5.0,
@@ -112,17 +114,19 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
   });
 
 
-  // Simulación de búsqueda de cliente por DNI
-  const buscarCliente = () => {
-    if (clienteDoc.length >= 6) {
-      // Mock de base de datos de clientes
-      if (clienteDoc === '12345678') {
-        setClienteNombre('Juan Pérez');
-        setClienteTlf('+584121234567');
-        setClienteEmail('juan.perez@email.com');
-        setWalletSaldo(450.50);
+  // Búsqueda real de cliente en base de datos
+  const buscarCliente = async () => {
+    if (clienteDoc.length >= 4 && onBuscarCliente) {
+      const cli = await onBuscarCliente(clienteDoc);
+      if (cli) {
+        setClienteNombre(cli.nombre || '');
+        setClienteTlf(cli.telefono || '');
+        setClienteEmail(cli.email || '');
+        setWalletSaldo(cli.wallet_saldo || 0);
       } else {
-        setClienteNombre('Nuevo Cliente');
+        setClienteNombre('');
+        setClienteTlf('');
+        setClienteEmail('');
         setWalletSaldo(0);
       }
     }
@@ -252,7 +256,7 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
   const diferenciaDistribucion = (parseFloat(montoDestino) || 0) - totalBeneficiariosMonto;
   const isDistribucionCompleta = Math.abs(diferenciaDistribucion) < 0.01;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Guardar los beneficiarios de la transacción en el historial del navegador
@@ -279,12 +283,13 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
     });
 
     if (onRegisterOperation) {
-      onRegisterOperation({
+      const success = await onRegisterOperation({
         paisOrigen: usarWallet ? 'Billetera (Web)' : paisOrigen,
         paisDestino,
         montoOrigen: parseFloat(montoOrigen),
         montoDestino: parseFloat(montoDestino),
         tasaVenta: parseFloat(tasaVenta),
+        tasaCompra: usarWallet ? 1 : (paisesData[paisOrigen]?.compra || 1.0),
         clienteDoc,
         clienteNombre,
         clienteTlf,
@@ -293,8 +298,9 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
         usarWallet,
       });
 
-      // Limpiar formulario automáticamente tras un registro exitoso
-      handleClearForm(true);
+      if (success) {
+        handleClearForm(true);
+      }
     }
   };
 

@@ -512,20 +512,44 @@ export default function App() {
     }, 4500);
   };
 
-  const handleRegisterOperation = async (data: any) => {
+  const handleBuscarCliente = async (cedula: string) => {
     try {
-      // 1. Validar o registrar cliente
-      let clienteId = '';
-      const { data: cliExist } = await supabase
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('cedula_dni', cedula)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        triggerToast(`✅ Cliente ${data.nombre} encontrado.`);
+        return data;
+      } else {
+        triggerToast(`ℹ️ Cliente nuevo. Llena sus datos y se guardará automáticamente al registrar la operación.`);
+        return null;
+      }
+    } catch (err: any) {
+      triggerToast(`❌ Error buscando cliente: ${err.message}`);
+      return null;
+    }
+  };
+
+  const handleRegisterOperation = async (data: any): Promise<boolean> => {
+    try {
+      let clienteId: string | null = null;
+
+      // 1. Validar si el cliente ya existe
+      const { data: cliExist, error: searchErr } = await supabase
         .from('clientes')
         .select('id')
         .eq('cedula_dni', data.clienteDoc)
-        .single();
+        .maybeSingle(); // Usa maybeSingle para no arrojar error si no existe
 
       if (cliExist) {
         clienteId = cliExist.id;
       } else {
-        const { data: newCli } = await supabase
+        // Si no existe, crearlo
+        const { data: newCli, error: cliErr } = await supabase
           .from('clientes')
           .insert({
             nombre: data.clienteNombre,
@@ -536,6 +560,8 @@ export default function App() {
           })
           .select('id')
           .single();
+
+        if (cliErr) throw new Error(`Fallo guardando cliente: ${cliErr.message}`);
         if (newCli) clienteId = newCli.id;
       }
 
@@ -548,6 +574,7 @@ export default function App() {
           pais_destino: data.paisDestino,
           monto_origen: data.montoOrigen,
           monto_destino: data.montoDestino,
+          tasa_compra_usdt: data.tasaCompra,
           tasa_venta_aplicada: data.tasaVenta,
           estado: 'PENDIENTE',
           cajero_origen: session?.user?.id
@@ -555,7 +582,7 @@ export default function App() {
         .select('id')
         .single();
 
-      if (remError) throw remError;
+      if (remError) throw new Error(`Fallo guardando remesa: ${remError.message}`);
 
       // 3. Insertar Beneficiarios en lote
       if (newRemesa) {
@@ -569,12 +596,17 @@ export default function App() {
           monto: parseFloat(b.monto)
         }));
 
-        await supabase.from('remesas_beneficiarios').insert(benPayloads);
+        const { error: benError } = await supabase.from('remesas_beneficiarios').insert(benPayloads);
+        if (benError) throw new Error(`Fallo guardando cuentas de destino: ${benError.message}`);
+
         triggerToast('Operación registrada exitosamente en Supabase.');
         fetchDatosSupabase();
+        return true; // Éxito, se limpiará el formulario
       }
+      return false;
     } catch (error: any) {
-      triggerToast(`Error al registrar operación: ${error.message}`);
+      triggerToast(`❌ ${error.message}`);
+      return false; // Falló, NO se limpiará el formulario
     }
   };
 
@@ -1111,6 +1143,7 @@ export default function App() {
             {activeTab === 'calculadora' && (
               <CalculadoraRemesa
                 onRegisterOperation={handleRegisterOperation}
+                onBuscarCliente={handleBuscarCliente}
                 showWallet={showWalletFeatures}
                 paisesData={paises}
                 margen={margenGlobal}

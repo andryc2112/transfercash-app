@@ -298,11 +298,11 @@ export default function App() {
     const cajeroMap: Record<string, string> = {};
     if (cajerosData) {
       cajerosData.forEach((c: any) => {
-        cajeroMap[c.id] = `${c.nombre} ${c.apellido}`;
+        cajeroMap[c.id] = c.apellido ? `${c.nombre} ${c.apellido}` : c.nombre;
       });
       setCajeros(cajerosData.map((c: any) => ({
         id: c.id,
-        nombre: `${c.nombre} ${c.apellido}`,
+        nombre: c.apellido ? `${c.nombre} ${c.apellido}` : c.nombre,
         email: c.binance_email || 'cajero@transfercash.com',
         pais_operacion: c.pais_operacion,
         saldo_acumulado: parseFloat(c.saldo_acumulado) || 0,

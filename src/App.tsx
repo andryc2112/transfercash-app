@@ -195,7 +195,7 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: '-5171951585',
+                chat_id: '-1005171951585',
                 text,
                 parse_mode: 'Markdown'
               })
@@ -210,7 +210,7 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: '-5171951585',
+                chat_id: '-1005171951585',
                 text,
                 parse_mode: 'Markdown'
               })
@@ -227,6 +227,8 @@ export default function App() {
 
   // Autenticación Supabase
   const [session, setSession] = useState<any>(null);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authNombre, setAuthNombre] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -641,7 +643,7 @@ export default function App() {
     fetch(`https://api.telegram.org/bot8576377601:AAFlnEF38oYA2i1RmwAMGIHY6slsVIvat8c/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: '-5171951585', text: msg, parse_mode: 'Markdown' })
+      body: JSON.stringify({ chat_id: '-1005171951585', text: msg, parse_mode: 'Markdown' })
     }).then(res => {
       if (res.ok) triggerToast('✅ Reporte enviado a Telegram exitosamente.');
       else triggerToast('Error enviando a Telegram (Revisa Chat ID).');
@@ -828,21 +830,49 @@ export default function App() {
           <form onSubmit={async (e) => {
             e.preventDefault();
             setAuthLoading(true);
-            const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
-            if (error) triggerToast(`Error: ${error.message}`);
+            if (authMode === 'login') {
+              const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+              if (error) triggerToast(`Error: ${error.message}`);
+            } else {
+              const { data, error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+              if (error) {
+                triggerToast(`Error: ${error.message}`);
+              } else {
+                triggerToast('Cuenta creada exitosamente. Iniciando sesión...');
+                if (data.user) {
+                  await supabase.from('perfiles_cajeros').upsert({
+                    id: data.user.id,
+                    nombre: authNombre || authEmail.split('@')[0],
+                    binance_email: authEmail,
+                    pais_operacion: 'VE'
+                  });
+                }
+              }
+            }
             setAuthLoading(false);
           }} className="space-y-4">
+            {authMode === 'register' && (
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase">Nombre y Apellido</label>
+                <input type="text" value={authNombre} onChange={e => setAuthNombre(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500" />
+              </div>
+            )}
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase">Correo Electrónico</label>
               <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500" />
             </div>
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase">Contraseña</label>
-              <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500" />
+              <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required minLength={6} className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white mt-1 focus:outline-none focus:border-indigo-500" />
             </div>
             <button type="submit" disabled={authLoading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition mt-4 shadow-lg shadow-indigo-600/20">
-              {authLoading ? 'Verificando...' : 'Iniciar Sesión'}
+              {authLoading ? 'Procesando...' : (authMode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta')}
             </button>
+            <div className="text-center pt-2">
+              <button type="button" onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} className="text-xs text-indigo-400 font-bold hover:text-indigo-300">
+                {authMode === 'login' ? '¿No tienes cuenta? Regístrate aquí' : 'Ya tengo cuenta, iniciar sesión'}
+              </button>
+            </div>
           </form>
         </div>
       ) : isAdminMode ? (

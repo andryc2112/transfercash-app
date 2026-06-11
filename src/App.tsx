@@ -4,7 +4,7 @@ import type { PaisData } from './components/CalculadoraRemesa';
 import { TablaPendientes } from './components/TablaPendientes';
 import { SeccionRetiros } from './components/SeccionRetiros';
 import { SeccionSan } from './components/SeccionSan';
-import { LogOut, Bell, Send, Settings } from 'lucide-react';
+import { LogOut, Bell, Settings } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { AdminWorkspace } from './components/AdminWorkspace';
 import type { Cliente, CajeroPerfil } from './components/AdminWorkspace';
@@ -1041,18 +1041,11 @@ export default function App() {
                   <Settings className="w-3.5 h-3.5 text-indigo-400" /> Admin
                 </button>
               )}
-              <button
-                onClick={simularReporteTelegram}
-                title="Simular Reporte Diario Telegram"
-                className="text-slate-400 hover:text-indigo-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900 flex items-center gap-1.5 text-xs font-bold"
-              >
-                <Send className="w-3.5 h-3.5" /> Bot Reporte
-              </button>
               <div className="hidden sm:flex flex-col text-right">
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Mi Caja Chica</span>
                 <span className="text-sm font-black text-indigo-400">${saldoAcumulado.toFixed(2)} USD</span>
               </div>
-              <button onClick={() => supabase.auth.signOut()} title="Cerrar Sesión" className="text-slate-400 hover:text-red-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900">
+              <button onClick={() => { simularReporteTelegram(); supabase.auth.signOut(); }} title="Cerrar Sesión y Enviar Reporte de Cierre" className="text-slate-400 hover:text-red-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900">
                 <LogOut className="w-4 h-4" />
               </button>
             </div>

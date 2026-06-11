@@ -8,7 +8,8 @@ import {
   Trash2,
   ArrowRight,
   FileText,
-  LogOut
+  LogOut,
+  Send
 } from 'lucide-react';
 import type { PaisData } from './CalculadoraRemesa';
 
@@ -104,6 +105,12 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   const [adminInput, setAdminInput] = useState(adminEmails.join(', '));
   const [tgInput, setTgInput] = useState(telegramChatId);
   const [selectedPaisPizarra, setSelectedPaisPizarra] = useState<string | null>(null);
+
+  // Modal de Telegram Admin
+  const [showTelegramModal, setShowTelegramModal] = useState(false);
+  const [tgMsgType, setTgMsgType] = useState<'general' | 'pais' | 'custom'>('general');
+  const [tgCustomMsg, setTgCustomMsg] = useState('');
+  const [tgSending, setTgSending] = useState(false);
 
   const globalMargin = margenGlobal;
 
@@ -278,6 +285,47 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
     }
   };
 
+  const handleSendAdminTelegram = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTgSending(true);
+
+    let text = '';
+    if (tgMsgType === 'general') {
+      text = `🤖 *Reporte General de Operaciones (Admin)*\n---------------------------\n🌍 *Volumen Total:* $${stats.volumeReal.toFixed(2)} USD\n📈 *Ganancia Realizada:* $${stats.realizedProfit.toFixed(2)} USD\n👥 *Total Operaciones:* ${remesas.filter(r => r.estado === 'PAGADO').length}\n🏦 *Inventario Binance:* ${stats.inventarioBinance.toFixed(2)} USDT`;
+    } else if (tgMsgType === 'pais') {
+      text = `🤖 *Reporte de Rendimiento por País*\n---------------------------\n`;
+      const paisesArr = Object.entries(stats.countryPerf);
+      if (paisesArr.length === 0) {
+        text += `_No hay operaciones registradas aún._`;
+      } else {
+        paisesArr.forEach(([code, data]) => {
+          text += `${paises[code]?.flag || '🌍'} *${paises[code]?.nombre || code}:* ${data.count} ops | Ganancia: $${data.profitReal.toFixed(2)}\n`;
+        });
+      }
+    } else {
+      text = tgCustomMsg;
+    }
+
+    try {
+      const res = await fetch(`https://api.telegram.org/bot8576377601:AAFlnEF38oYA2i1RmwAMGIHY6slsVIvat8c/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: telegramChatId, text, parse_mode: 'Markdown' })
+      });
+      if (res.ok) {
+        alert('✅ Reporte enviado a Telegram exitosamente.');
+        setShowTelegramModal(false);
+        setTgCustomMsg('');
+      } else {
+        const err = await res.json();
+        alert(`Error Telegram: ${err.description}`);
+      }
+    } catch (error) {
+      alert('Error de red enviando a Telegram.');
+    }
+    setTgSending(false);
+  };
+
   // Depósitos y Retiros pendientes de Modal
   const [selectedDep, setSelectedDep] = useState<any | null>(null);
   const [depTasa, setDepTasa] = useState('1.0');
@@ -315,12 +363,20 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={onClose}
-          className="text-slate-400 hover:text-white transition py-2 px-4 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center gap-1.5 text-xs font-bold"
-        >
-          <LogOut className="w-3.5 h-3.5 rotate-180" /> Salir del Admin
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowTelegramModal(true)}
+            className="text-slate-400 hover:text-sky-400 transition py-2 px-4 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center gap-1.5 text-xs font-bold"
+          >
+            <Send className="w-3.5 h-3.5" /> Bot Telegram
+          </button>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white transition py-2 px-4 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center gap-1.5 text-xs font-bold"
+          >
+            <LogOut className="w-3.5 h-3.5 rotate-180" /> Salir del Admin
+          </button>
+        </div>
       </header>
 
       {/* Sub-Navegación Admin Tabs */}
@@ -1567,6 +1623,56 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                 Cerrar Pizarra
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ENVIAR MENSAJE TELEGRAM (ADMIN) */}
+      {showTelegramModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-sky-600 text-white p-5 flex justify-between items-center">
+              <h3 className="font-bold text-base uppercase tracking-wider flex items-center gap-2">
+                <Send className="w-4 h-4" /> Enviar Reporte Telegram
+              </h3>
+              <button onClick={() => setShowTelegramModal(false)} className="text-white hover:text-sky-100 text-2xl font-bold">&times;</button>
+            </div>
+            <form onSubmit={handleSendAdminTelegram} className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase">Tipo de Mensaje</label>
+                <select
+                  value={tgMsgType}
+                  onChange={(e) => setTgMsgType(e.target.value as any)}
+                  className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-sm font-bold"
+                >
+                  <option value="general">📊 Resumen General de Operaciones</option>
+                  <option value="pais">🌍 Resumen de Rendimiento por País</option>
+                  <option value="custom">✍️ Mensaje Personalizado / Pruebas</option>
+                </select>
+              </div>
+
+              {tgMsgType === 'custom' && (
+                <div className="space-y-2 animate-in fade-in">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Mensaje (Soporta Markdown *negrita*)</label>
+                  <textarea
+                    required
+                    rows={4}
+                    value={tgCustomMsg}
+                    onChange={(e) => setTgCustomMsg(e.target.value)}
+                    placeholder="Escribe tu mensaje aquí..."
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-sm"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4 border-t border-slate-800">
+                <button type="button" onClick={() => setShowTelegramModal(false)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition">Cancelar</button>
+                <button type="submit" disabled={tgSending} className="w-2/3 py-2.5 rounded-lg font-bold bg-sky-600 hover:bg-sky-700 text-white transition shadow-lg shadow-sky-600/20 flex justify-center items-center gap-2">
+                  {tgSending ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : <Send className="w-4 h-4" />}
+                  {tgSending ? 'Enviando...' : 'Enviar a Telegram'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

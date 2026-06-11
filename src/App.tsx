@@ -135,42 +135,52 @@ export default function App() {
     AI: { compra: 1.0, venta: 1.0 }
   });
 
-  // Fluctuar ligeramente las tasas de Binance para simular realismo en tiempo real
+  // Conexión real a la API pública de CriptoYa (Binance P2P Real sin CORS)
   useEffect(() => {
-    // ========================================================================
-    // 🚀 API BINANCE P2P (Requiere un servidor puente/proxy para evitar CORS)
-    // ========================================================================
-    // Binance no permite consultar P2P directamente desde el navegador (Vercel).
-    // Debes apuntar a un archivo en tu WordPress o Supabase que consulte a Binance.
-    //
-    // const fetchBinanceP2P = async () => {
-    //   try {
-    //     const res = await fetch('https://tu-dominio.com/wp-json/tc/v1/binance-p2p'); // <-- TU PROXY
-    //     const tasas = await res.json(); 
-    //     
-    //     setBinanceMarketRates(prev => ({ 
-    //       ...prev, 
-    //       VE: { compra: tasas.VES.compra, venta: tasas.VES.venta },
-    //       CO: { compra: tasas.COP.compra, venta: tasas.COP.venta }
-    //     }));
-    //   } catch (error) { console.error(error); }
-    // };
-    // setInterval(fetchBinanceP2P, 60000); // Consultar cada 60 segundos
+    const fetchRealRates = async () => {
+      try {
+        const currencies: Record<string, string> = {
+          VE: 'ves',
+          PE: 'pen',
+          CO: 'cop',
+          CL: 'clp',
+          AR: 'ars',
+          ES: 'eur',
+          BR: 'brl',
+          DO: 'dop'
+        };
 
-    const interval = setInterval(() => {
-      setBinanceMarketRates(prev => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach(code => {
-          if (code === 'PA' || code === 'US' || code === 'ZI' || code === 'WA' || code === 'AI') return;
-          const fluctuationPercent = (Math.random() - 0.5) * 0.004; // ±0.2%
-          updated[code] = {
-            compra: Number((updated[code].compra * (1 + fluctuationPercent)).toFixed(code === 'CO' || code === 'CL' || code === 'AR' ? 0 : 4)),
-            venta: Number((updated[code].venta * (1 + fluctuationPercent)).toFixed(code === 'CO' || code === 'CL' || code === 'AR' ? 0 : 4))
-          };
-        });
-        return updated;
-      });
-    }, 15000);
+        const updatedRates: Record<string, { compra: number; venta: number }> = {};
+
+        await Promise.all(
+          Object.entries(currencies).map(async ([code, fiat]) => {
+            try {
+              const res = await fetch(`https://criptoya.com/api/binancep2p/usdt/${fiat}/0.1`);
+              if (res.ok) {
+                const data = await res.json();
+                if (data.ask && data.bid) {
+                  updatedRates[code] = {
+                    compra: parseFloat(data.bid), // Bid es el precio más bajo (al que el cajero compra USDT)
+                    venta: parseFloat(data.ask)   // Ask es el precio más alto (al que el cajero vende USDT)
+                  };
+                }
+              }
+            } catch (e) {
+              // Ignoramos silenciosamente si una moneda falla para no detener las demás
+            }
+          })
+        );
+
+        if (Object.keys(updatedRates).length > 0) {
+          setBinanceMarketRates(prev => ({ ...prev, ...updatedRates }));
+        }
+      } catch (error) {
+        console.error('Error obteniendo tasas reales:', error);
+      }
+    };
+
+    fetchRealRates(); // Llamada inicial apenas abre la app
+    const interval = setInterval(fetchRealRates, 60000); // Consultar y actualizar en tiempo real cada 60 segundos
     return () => clearInterval(interval);
   }, []);
 

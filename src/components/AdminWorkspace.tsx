@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  TrendingUp, 
-  Coins, 
-  Users, 
-  Download, 
-  Search, 
-  Trash2, 
-  ArrowRight, 
-  FileText, 
+import {
+  TrendingUp,
+  Coins,
+  Users,
+  Download,
+  Search,
+  Trash2,
+  ArrowRight,
+  FileText,
   LogOut
 } from 'lucide-react';
 import type { PaisData } from './CalculadoraRemesa';
@@ -81,7 +81,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   onClose
 }) => {
   const [activeTab, setActiveTab] = useState<'resumen' | 'operaciones' | 'clientes' | 'operadores' | 'retiros' | 'recargas' | 'auditoria' | 'ajustes'>('resumen');
-  
+
   // Estados de modales
   const [selectedTracking, setSelectedTracking] = useState<any | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
@@ -111,7 +111,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
       // Calcular equivalencia en USDT
       const usdIn = tCompra > 0 ? (r.montoOrigen / tCompra) : 0;
       const usdOut = tVenta > 0 ? (r.montoDestino / tVenta) : 0;
-      
+
       // La ganancia es: USDT ingresados - USDT egresados
       let profit = 0;
       if (tVenta === 1.0 && r.destino !== 'US') {
@@ -162,8 +162,8 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   // Filtrado de la bitácora
   const filteredRemesas = useMemo(() => {
     return remesas.filter(r => {
-      const matchSearch = 
-        r.id.toString().includes(searchTerm) || 
+      const matchSearch =
+        r.id.toString().includes(searchTerm) ||
         r.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
         r.cedula.includes(searchTerm) ||
         (r.cajeroOrigen && r.cajeroOrigen.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -178,14 +178,14 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
     const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
     const volumeByDay = [0, 0, 0, 0, 0, 0, 0];
     const profitByDay = [0, 0, 0, 0, 0, 0, 0];
-    
+
     // Obtener día de la semana actual
     const todayIndex = new Date().getDay();
-    
+
     // Valores base de ejemplo (volumen/ganancia de referencia) para poblar el gráfico
     const baseVolumes = [420, 580, 720, 910, 1100, 1420, 850];
     const baseProfits = [21.5, 29.0, 36.5, 45.0, 55.0, 71.0, 42.5];
-    
+
     // Sumar transacciones reales
     remesas.forEach(r => {
       if (r.estado === 'PAGADO') {
@@ -194,7 +194,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
         // Asignar a un día semi-aleatorio basado en el ID para consistencia visual
         const dayIdx = (r.id % 7);
         volumeByDay[dayIdx] += usdIn;
-        
+
         const tVenta = r.tasaVenta || 1.0;
         const usdOut = tVenta > 0 ? (r.montoDestino / tVenta) : 0;
         const profit = tVenta === 1.0 && r.destino !== 'US' ? (r.gananciaCalculada || usdIn * 0.05) : (usdIn - usdOut);
@@ -210,7 +210,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
     const labels: string[] = [];
     const volumeValues: number[] = [];
     const profitValues: number[] = [];
-    
+
     for (let i = 6; i >= 0; i--) {
       const targetIdx = (todayIndex - i + 7) % 7;
       labels.push(days[targetIdx]);
@@ -225,7 +225,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   const handleExportCSV = () => {
     const BOM = "\uFEFF";
     let csvContent = "ID/TRX,Fecha,Cliente Remitente,Cedula/DNI,Pais Origen,Monto Origen,Pais Destino,Monto Destino,Estado,Cajero Origen,Cajero Destino,Ganancia (USD)\n";
-    
+
     filteredRemesas.forEach(r => {
       const row = [
         `TRX-${r.id}`,
@@ -248,7 +248,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `Reporte_TransferCash_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", `Reporte_TransferCash_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -281,7 +281,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
 
   return (
     <div className="w-full max-w-4xl bg-slate-950 md:rounded-3xl shadow-2xl md:border md:border-slate-800/80 flex flex-col md:h-[90vh] overflow-hidden min-h-screen md:min-h-0 text-slate-100 font-sans">
-      
+
       {/* Cabecera Admin Premium */}
       <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -301,7 +301,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
           </div>
         </div>
 
-        <button 
+        <button
           onClick={onClose}
           className="text-slate-400 hover:text-white transition py-2 px-4 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center gap-1.5 text-xs font-bold"
         >
@@ -324,11 +324,10 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`py-2 px-4 rounded-xl text-xs font-extrabold uppercase tracking-wider transition ${
-              activeTab === tab.id 
-                ? 'bg-slate-950 text-indigo-400 border border-slate-800/80' 
+            className={`py-2 px-4 rounded-xl text-xs font-extrabold uppercase tracking-wider transition ${activeTab === tab.id
+                ? 'bg-slate-950 text-indigo-400 border border-slate-800/80'
                 : 'text-slate-500 hover:text-slate-300'
-            }`}
+              }`}
           >
             {tab.label}
           </button>
@@ -337,7 +336,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
 
       {/* Contenedor Dinámico con Scrollbox */}
       <main className="flex-grow overflow-y-auto bg-slate-900 text-slate-100 pb-20 md:pb-6 scrollbar-none p-6 space-y-6">
-        
+
         {/* TAB 1: RESUMEN GENERAL */}
         {activeTab === 'resumen' && (
           <div className="space-y-6">
@@ -345,7 +344,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
             <div>
               <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">🏦 Arqueo de Capital y Pasivos</h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                
+
                 <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-lg">
                   <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block">Saldo Estimado Binance</span>
                   <span className="text-xl font-black text-amber-500 mt-2 block">
@@ -385,7 +384,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
             <div>
               <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">📈 Panorama Financiero (Operativa Global)</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                
+
                 <div className="bg-slate-950/40 border border-slate-850 p-5 rounded-2xl flex items-center justify-between">
                   <div>
                     <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Volumen Transaccionado</span>
@@ -415,7 +414,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
 
             {/* Gráficos de Rendimiento SVG */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
+
               {/* Gráfico 1: Volumen Semanal */}
               <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl shadow-xl">
                 <div className="flex justify-between items-center mb-4">
@@ -439,7 +438,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                           <span className="absolute -top-6 text-[10px] font-black text-indigo-400 opacity-0 group-hover:opacity-100 transition duration-150">
                             ${Math.round(val)}
                           </span>
-                          <div 
+                          <div
                             style={{ height: `${Math.max(pct, 5)}%` }}
                             className="w-8 bg-gradient-to-t from-indigo-600 to-indigo-400 rounded-t-lg transition-all duration-300 group-hover:from-indigo-500 group-hover:to-indigo-300 shadow-lg shadow-indigo-600/10"
                           />
@@ -468,7 +467,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                       const y = height - (val / maxVal) * (height - 10);
                       return { x, y, val };
                     });
-                    
+
                     const pathD = points.reduce((acc, p, idx) => {
                       return acc + `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y} `;
                     }, "");
@@ -485,9 +484,9 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                             </linearGradient>
                           </defs>
                           {/* Grid Lines */}
-                          <line x1="0" y1={height/3} x2={width} y2={height/3} stroke="#334155" strokeOpacity="0.2" strokeDasharray="3 3" />
-                          <line x1="0" y1={(height/3)*2} x2={width} y2={(height/3)*2} stroke="#334155" strokeOpacity="0.2" strokeDasharray="3 3" />
-                          
+                          <line x1="0" y1={height / 3} x2={width} y2={height / 3} stroke="#334155" strokeOpacity="0.2" strokeDasharray="3 3" />
+                          <line x1="0" y1={(height / 3) * 2} x2={width} y2={(height / 3) * 2} stroke="#334155" strokeOpacity="0.2" strokeDasharray="3 3" />
+
                           {/* Area */}
                           <path d={areaD} fill="url(#profitGrad)" />
                           {/* Line */}
@@ -560,7 +559,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
         {/* TAB 2: OPERACIONES / BITÁCORA */}
         {activeTab === 'operaciones' && (
           <div className="space-y-6">
-            
+
             {/* Barra de Filtros */}
             <div className="flex flex-col md:flex-row gap-3 bg-slate-950 p-4 rounded-2xl border border-slate-800 justify-between items-center shadow-lg">
               <div className="flex flex-1 gap-2 w-full">
@@ -585,7 +584,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                   <option value="CANCELADO">🗑️ Cancelados</option>
                 </select>
               </div>
-              
+
               <button
                 onClick={handleExportCSV}
                 className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider py-3 px-5 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/10"
@@ -616,7 +615,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                       const tVenta = rem.tasaVenta || 1.0;
                       const usdIn = tCompra > 0 ? (rem.montoOrigen / tCompra) : 0;
                       const usdOut = tVenta > 0 ? (rem.montoDestino / tVenta) : 0;
-                      
+
                       let profit = 0;
                       if (tVenta === 1.0 && rem.destino !== 'US') {
                         profit = rem.gananciaCalculada || (usdIn * 0.05);
@@ -681,13 +680,12 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                             </div>
                           </td>
                           <td className="p-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                              rem.estado === 'PAGADO' 
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950' 
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${rem.estado === 'PAGADO'
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950'
                                 : rem.estado === 'CANCELADO'
-                                ? 'bg-red-500/10 text-red-400 border border-red-950'
-                                : 'bg-amber-500/10 text-amber-400 border border-amber-950'
-                            }`}>
+                                  ? 'bg-red-500/10 text-red-400 border border-red-950'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-950'
+                              }`}>
                               {rem.estado}
                             </span>
                           </td>
@@ -855,13 +853,12 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                         <td className="p-4 text-red-400">-${rt.fee.toFixed(2)}</td>
                         <td className="p-4 text-emerald-400 font-black">${rt.totalRecibir.toFixed(2)}</td>
                         <td className="p-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                            rt.estado === 'PAGADO' 
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950' 
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${rt.estado === 'PAGADO'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950'
                               : rt.estado === 'RECHAZADO'
-                              ? 'bg-red-500/10 text-red-400 border border-red-950'
-                              : 'bg-amber-500/10 text-amber-400 border border-amber-950'
-                          }`}>
+                                ? 'bg-red-500/10 text-red-400 border border-red-950'
+                                : 'bg-amber-500/10 text-amber-400 border border-amber-950'
+                            }`}>
                             {rt.estado}
                           </span>
                         </td>
@@ -945,13 +942,12 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                         )}
                       </td>
                       <td className="p-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                          dep.estado === 'PAGADO' 
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950' 
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${dep.estado === 'PAGADO'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950'
                             : dep.estado === 'CANCELADO'
-                            ? 'bg-red-500/10 text-red-400 border border-red-950'
-                            : 'bg-amber-500/10 text-amber-400 border border-amber-950'
-                        }`}>
+                              ? 'bg-red-500/10 text-red-400 border border-red-950'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-950'
+                          }`}>
                           {dep.estado}
                         </span>
                       </td>
@@ -993,7 +989,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
         {/* TAB 6: AJUSTES Y TASAS DIARIAS */}
         {activeTab === 'ajustes' && (
           <div className="space-y-6">
-            
+
             {/* Banner de alerta de desviación de tasas Binance P2P */}
             {(() => {
               const alerts: string[] = [];
@@ -1006,9 +1002,9 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                   }
                 }
               });
-              
+
               if (alerts.length === 0) return null;
-              
+
               return (
                 <div className="bg-red-500/10 border border-red-500/30 text-red-300 p-4 rounded-2xl text-xs space-y-2 mb-6 animate-pulse">
                   <span className="font-extrabold flex items-center gap-1.5 uppercase text-red-400">
@@ -1088,53 +1084,63 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                   Tasa Única Diaria
                 </span>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {Object.entries(paises).map(([code, info]) => (
-                  <div key={code} className="flex items-center justify-between gap-4 p-4 bg-slate-950 border border-slate-800 rounded-2xl hover:border-slate-700 transition shadow-md">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{info.flag}</span>
-                      <div>
-                        <span className="font-bold text-sm block text-white">{info.nombre} ({info.simbolo})</span>
-                        <span className="text-[10px] text-slate-500 block">Código: {code}</span>
-                        {(() => {
-                          const marketVal = binanceMarketRates[code]?.venta || 0;
-                          if (marketVal > 0 && info.venta > 0) {
-                            const diff = Math.abs((info.venta - marketVal) / marketVal) * 100;
-                            if (diff > 1.5) {
-                              return (
-                                <span className="text-[9px] bg-red-950/40 text-red-400 border border-red-900/60 px-1.5 py-0.5 rounded font-black uppercase mt-1 inline-block animate-pulse">
-                                  ⚠️ Desviado {diff.toFixed(1)}% (P2P: {marketVal.toFixed(2)})
-                                </span>
-                              );
+                  <div key={code} className="flex flex-col gap-2 p-4 bg-slate-950 border border-slate-800 rounded-2xl hover:border-slate-700 transition shadow-md">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{info.flag}</span>
+                        <div>
+                          <span className="font-bold text-sm block text-white">{info.nombre} ({info.simbolo})</span>
+                          <span className="text-[10px] text-slate-500 block">Código: {code}</span>
+                          {(() => {
+                            const marketVal = binanceMarketRates[code]?.venta || 0;
+                            if (marketVal > 0 && info.venta > 0) {
+                              const diff = Math.abs((info.venta - marketVal) / marketVal) * 100;
+                              if (diff > 1.5) {
+                                return (
+                                  <span className="text-[9px] bg-red-950/40 text-red-400 border border-red-900/60 px-1.5 py-0.5 rounded font-black uppercase mt-1 inline-block animate-pulse">
+                                    ⚠️ Desviado {diff.toFixed(1)}% (P2P: {marketVal.toFixed(2)})
+                                  </span>
+                                );
+                              }
                             }
-                          }
-                          return null;
-                        })()}
+                            return null;
+                          })()}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Compra</label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={info.compra}
+                            onChange={(e) => onUpdateExchangeRate(code, parseFloat(e.target.value) || 0, info.venta)}
+                            className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Venta</label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={info.venta}
+                            onChange={(e) => onUpdateExchangeRate(code, info.compra, parseFloat(e.target.value) || 0)}
+                            className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Compra</label>
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={info.compra}
-                          onChange={(e) => onUpdateExchangeRate(code, parseFloat(e.target.value) || 0, info.venta)}
-                          className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
-                        />
+                    {code !== 'PA' && code !== 'US' && code !== 'ZI' && code !== 'WA' && code !== 'AI' && (
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-800/80 mt-1">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Tasa sugerida al público (1 USD =):</span>
+                        <span className="text-xs font-black text-emerald-400">
+                          {(info.venta * (1 - margenGlobal / 100)).toFixed(code === 'CO' || code === 'CL' || code === 'AR' ? 0 : 2)} {info.simbolo}
+                        </span>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Venta</label>
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={info.venta}
-                          onChange={(e) => onUpdateExchangeRate(code, info.compra, parseFloat(e.target.value) || 0)}
-                          className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1201,10 +1207,10 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                 &times;
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto space-y-6 flex-grow scrollbar-none text-xs">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
+
                 {/* Bloque Cajero Origen */}
                 <div className="bg-slate-900/40 border-l-4 border-indigo-500 p-5 rounded-r-xl space-y-3">
                   <h4 className="font-extrabold text-sm text-indigo-400 flex items-center gap-1.5 uppercase">🛫 Cajero Origen</h4>
@@ -1228,13 +1234,12 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                   <h4 className="font-extrabold text-sm text-emerald-400 flex items-center gap-1.5 uppercase">🛬 Cajero Destino</h4>
                   <p><strong>Cajero:</strong> {selectedTracking.cajeroDestino || 'N/A'}</p>
                   <p><strong>Estado:</strong>{' '}
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                      selectedTracking.estado === 'PAGADO' 
-                        ? 'bg-emerald-500/10 text-emerald-400' 
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${selectedTracking.estado === 'PAGADO'
+                        ? 'bg-emerald-500/10 text-emerald-400'
                         : selectedTracking.estado === 'CANCELADO'
-                        ? 'bg-red-500/10 text-red-400'
-                        : 'bg-amber-500/10 text-amber-400'
-                    }`}>
+                          ? 'bg-red-500/10 text-red-400'
+                          : 'bg-amber-500/10 text-amber-400'
+                      }`}>
                       {selectedTracking.estado}
                     </span>
                   </p>
@@ -1294,7 +1299,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               )}
 
             </div>
-            
+
             <div className="bg-slate-900 border-t border-slate-800 p-5 flex justify-end">
               <button
                 onClick={() => setSelectedTracking(null)}

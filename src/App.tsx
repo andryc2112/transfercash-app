@@ -4,7 +4,6 @@ import type { PaisData } from './components/CalculadoraRemesa';
 import { TablaPendientes } from './components/TablaPendientes';
 import { SeccionRetiros } from './components/SeccionRetiros';
 import { SeccionSan } from './components/SeccionSan';
-import { GeneradorPlantilla } from './components/GeneradorPlantilla';
 import { LogOut, Bell, AlertTriangle, Send, Settings } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { AdminWorkspace } from './components/AdminWorkspace';
@@ -77,7 +76,7 @@ interface GrupoSan {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'calculadora' | 'pendientes' | 'retiros' | 'san' | 'plantilla'>('calculadora');
+  const [activeTab, setActiveTab] = useState<'calculadora' | 'pendientes' | 'retiros' | 'san'>('calculadora');
   const [cajeroPais] = useState('VE'); // Venezuela
   const [saldoAcumulado, setSaldoAcumulado] = useState(1280.45);
   const [reputacionSan, setReputacionSan] = useState(85);
@@ -1055,9 +1054,6 @@ export default function App() {
                 onPayAporte={handlePayAporte}
               />
             )}
-            {activeTab === 'plantilla' && (
-              <GeneradorPlantilla isAdmin={isAdminMode} />
-            )}
           </main>
 
           {/* Tab Bar de Navegación Nativo Móvil */}
@@ -1104,15 +1100,6 @@ export default function App() {
                 <span className="text-[10px] uppercase tracking-wider font-semibold">Ahorro SAN</span>
               </button>
             )}
-
-            <button
-              onClick={() => setActiveTab('plantilla')}
-              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${activeTab === 'plantilla' ? 'text-indigo-400 font-bold' : 'text-slate-500 hover:text-slate-300'
-                }`}
-            >
-              <span className="text-lg">🖼️</span>
-              <span className="text-[10px] uppercase tracking-wider font-semibold">Plantilla</span>
-            </button>
           </nav>
         </div>
       )}

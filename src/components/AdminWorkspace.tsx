@@ -69,6 +69,7 @@ interface AdminWorkspaceProps {
   onEditRemesaRates: (id: number, tasaCompra: number, tasaVenta: number) => void;
   onToggleEstadoCajero: (id: string, estado: string) => void;
   onEditCajero: (id: string, data: Partial<CajeroPerfil>) => void;
+  onSyncSystem: () => Promise<void>;
   onClose: () => void;
 }
 
@@ -129,6 +130,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   onEditRemesaRates,
   onToggleEstadoCajero,
   onEditCajero,
+  onSyncSystem,
   onClose
 }) => {
   const [activeTab, setActiveTab] = useState<'resumen' | 'operaciones' | 'clientes' | 'operadores' | 'retiros' | 'recargas' | 'auditoria' | 'ajustes'>('resumen');
@@ -832,13 +834,14 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                               {rem.estado}
                             </span>
                           </td>
-                          <td className="p-4">
-                            <div className="flex flex-col gap-1">
+                          <td className="p-4 text-center">
+                            <div className="flex justify-center items-center gap-2">
                               <button
                                 onClick={() => setSelectedTracking(rem)}
-                                className="bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px] font-bold py-1.5 px-3 rounded-lg border border-slate-800 transition"
+                                className="text-[14px] bg-slate-900 hover:bg-slate-800 text-slate-300 p-1.5 rounded-lg border border-slate-800 transition"
+                                title="Ver Tracking"
                               >
-                                🔍 Tracking
+                                🔍
                               </button>
                               <button
                                 onClick={() => {
@@ -846,16 +849,18 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                                   setEditTasaCompra(rem.tasaCompra?.toString() || '1');
                                   setEditTasaVenta(rem.tasaVenta?.toString() || '1');
                                 }}
-                                className="bg-sky-950/20 hover:bg-sky-950/60 text-sky-400 text-[10px] font-bold py-1 px-3 rounded-lg border border-sky-950/50 transition"
+                                className="text-[14px] bg-sky-950/20 hover:bg-sky-950/60 text-sky-400 p-1.5 rounded-lg border border-sky-950/50 transition"
+                                title="Editar Tasas"
                               >
-                                ✏️ Editar Tasas
+                                ✏️
                               </button>
                               {rem.estado !== 'CANCELADO' && (
                                 <button
                                   onClick={() => setCancellingId(rem.id)}
-                                  className="bg-red-950/20 hover:bg-red-950/60 text-red-400 text-[10px] font-bold py-1 px-3 rounded-lg border border-red-950/50 transition"
+                                  className="text-[14px] bg-red-950/20 hover:bg-red-950/60 text-red-400 p-1.5 rounded-lg border border-red-950/50 transition"
+                                  title="Cancelar Transacción"
                                 >
-                                  🗑️ Cancelar
+                                  🗑️
                                 </button>
                               )}
                             </div>
@@ -892,26 +897,36 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                     <th className="p-4">Nombre / Email</th>
                     <th className="p-4">DNI / Cédula DNI</th>
                     <th className="p-4">Teléfono</th>
+                    <th className="p-4 text-center">Operaciones</th>
+                    <th className="p-4 text-right">Volumen Enviado</th>
                     <th className="p-4 text-right">Saldo Billetera (Wallet)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40">
-                  {clientes.map(cli => (
-                    <tr key={cli.id} className="hover:bg-slate-900/30 transition align-middle">
-                      <td className="p-4">
-                        <span className="font-extrabold text-slate-200 block text-xs">{cli.nombre}</span>
-                        <span className="text-[10px] text-slate-500">{cli.email || 'Sin Correo'}</span>
-                      </td>
-                      <td className="p-4 font-mono font-bold text-slate-400">{cli.cedula_dni}</td>
-                      <td className="p-4 font-bold text-slate-400">{cli.telefono || 'N/A'}</td>
-                      <td className="p-4 text-right font-black text-purple-400">
-                        ${cli.wallet_saldo.toFixed(2)} USD
-                      </td>
-                    </tr>
-                  ))}
+                  {clientes.map(cli => {
+                    const cliRemesas = remesas.filter(r => r.cedula === cli.cedula_dni && r.estado === 'PAGADO');
+                    const cliOpsCount = cliRemesas.length;
+                    const cliTotalSentUsd = cliRemesas.reduce((acc, r) => acc + (r.tasaCompra > 0 ? r.montoOrigen / r.tasaCompra : 0), 0);
+
+                    return (
+                      <tr key={cli.id} className="hover:bg-slate-900/30 transition align-middle">
+                        <td className="p-4">
+                          <span className="font-extrabold text-slate-200 block text-xs">{cli.nombre}</span>
+                          <span className="text-[10px] text-slate-500">{cli.email || 'Sin Correo'}</span>
+                        </td>
+                        <td className="p-4 font-mono font-bold text-slate-400">{cli.cedula_dni}</td>
+                        <td className="p-4 font-bold text-slate-400">{cli.telefono || 'N/A'}</td>
+                        <td className="p-4 text-center font-black text-indigo-400">{cliOpsCount}</td>
+                        <td className="p-4 text-right font-bold text-emerald-400">${cliTotalSentUsd.toFixed(2)} USD</td>
+                        <td className="p-4 text-right font-black text-purple-400">
+                          ${cli.wallet_saldo.toFixed(2)} USD
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {clientes.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="text-center p-8 text-slate-500">
+                      <td colSpan={6} className="text-center p-8 text-slate-500">
                         No hay clientes registrados en la red.
                       </td>
                     </tr>
@@ -935,15 +950,15 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                     <th className="p-4">Operador / Cajero</th>
                     <th className="p-4">País Asignado</th>
                     <th className="p-4">Saldo Caja Chica</th>
-                    <th className="p-4 text-right">Comisión Generada (Histórico)</th>
+                    <th className="p-4 text-right">Ganancia Generada (Histórico)</th>
                     <th className="p-4 text-center">Acceso</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40">
                   {cajeros.map(c => {
-                    // Sumar históricos de retiros cobrados
-                    const retirosCajero = retiros.filter(rt => rt.cajeroId === c.id && rt.estado === 'PAGADO');
-                    const comisionesHistoricas = retirosCajero.reduce((acc, curr) => acc + (curr.fee || 0), 0);
+                    // Calcular la ganancia total generada (Retirado + Saldo Actual)
+                    const totalRetirado = retiros.filter(rt => rt.cajeroId === c.id && (rt.estado === 'PAGADO' || rt.estado === 'PENDIENTE')).reduce((acc, curr) => acc + curr.monto, 0);
+                    const totalGenerado = c.saldo_acumulado + totalRetirado;
 
                     return (
                       <tr key={c.id} className="hover:bg-slate-900/30 transition">
@@ -958,7 +973,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                           <span className="text-indigo-400 font-black text-sm">${c.saldo_acumulado.toFixed(2)}</span>
                         </td>
                         <td className="p-4 text-right font-black text-amber-500">
-                          ${comisionesHistoricas.toFixed(2)}
+                          ${totalGenerado.toFixed(2)}
                         </td>
                         <td className="p-4 text-center">
                           <div className="flex gap-2 justify-center">
@@ -1253,6 +1268,35 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               </div>
             </div>
 
+            {/* Mantenimiento del Sistema */}
+            <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl shadow-md space-y-3">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2 flex justify-between items-center">
+                <span>🛠️ Mantenimiento del Sistema</span>
+              </h3>
+              <div className="flex flex-col gap-2 text-xs font-bold text-slate-350">
+                <p className="text-slate-400 leading-relaxed">
+                  Si editaste las tasas de operaciones pasadas o si los saldos de los cajeros presentan algún desajuste, utiliza este botón para forzar una sincronización global.
+                  <br />El sistema recalculará la ganancia de todas las transacciones históricas y reconstruirá los saldos de "Mi Caja Chica" desde cero.
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={async (e) => {
+                      const btn = e.currentTarget;
+                      btn.disabled = true;
+                      const originalText = btn.innerText;
+                      btn.innerText = 'Sincronizando base de datos...';
+                      await onSyncSystem();
+                      btn.innerText = originalText;
+                      btn.disabled = false;
+                    }}
+                    className="bg-red-900/40 hover:bg-red-900/60 text-red-400 border border-red-900/50 px-4 py-2 rounded-lg font-bold transition flex items-center gap-2"
+                  >
+                    <span>🔄 Reconstruir Ganancias y Saldos Históricos</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Toggles de Visibilidad */}
             <div className="space-y-3">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">
@@ -1502,7 +1546,19 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                 <div className="text-center p-5 bg-indigo-950/20 border border-indigo-900/50 rounded-xl space-y-1">
                   <h4 className="font-extrabold text-xs text-indigo-400 uppercase tracking-widest">Ganancia Neta Calculada de esta Operación</h4>
                   <div className="text-3xl font-black text-emerald-500">
-                    ${(selectedTracking.gananciaCalculada || 0.00).toFixed(2)}
+                    ${(() => {
+                      const tCompra = selectedTracking.tasaCompra || 1.0;
+                      const tVenta = selectedTracking.tasaVenta || 1.0;
+                      const usdIn = tCompra > 0 ? (selectedTracking.montoOrigen / tCompra) : 0;
+                      const usdOut = tVenta > 0 ? (selectedTracking.montoDestino / tVenta) : 0;
+                      let profit = 0;
+                      if (tVenta === 1.0 && selectedTracking.destino !== 'US' && selectedTracking.destino !== 'PA') {
+                        profit = selectedTracking.gananciaCalculada || (usdIn * 0.05);
+                      } else {
+                        profit = usdIn - usdOut;
+                      }
+                      return profit.toFixed(2);
+                    })()}
                   </div>
                   <span className="text-[10px] text-slate-500 font-bold block">
                     Fórmula de Arbitraje: USDT Adquiridos - USDT Desembolsados

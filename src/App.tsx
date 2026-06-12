@@ -372,8 +372,8 @@ export default function App() {
         destino: r.pais_destino,
         montoOrigen: parseFloat(r.monto_origen),
         montoDestino: parseFloat(r.monto_destino),
-        simboloOrigen: r.pais_origen === 'ES' ? 'EUR' : 'USD',
-        simboloDestino: r.pais_destino === 'VE' ? 'VES' : 'USD',
+        simboloOrigen: defaultPaisesData[r.pais_origen]?.simbolo || 'USD',
+        simboloDestino: defaultPaisesData[r.pais_destino]?.simbolo || 'USD',
         cliente: r.clientes?.nombre || 'Desconocido',
         cedula: r.clientes?.cedula_dni || 'N/A',
         telefono: r.clientes?.telefono || '',
@@ -631,6 +631,43 @@ export default function App() {
       }
     }
 
+    // 1. Obtener la remesa para calcular y repartir la ganancia
+    let gananciaNeta = 0;
+    try {
+      const { data: remData } = await supabase.from('remesas').select('*').eq('id', id).single();
+      if (remData) {
+        const tCompra = parseFloat(remData.tasa_compra_usdt) || 1.0;
+        const usdIn = tCompra > 0 ? (parseFloat(remData.monto_origen) / tCompra) : 0;
+        const usdOut = binanceTasa > 0 ? (parseFloat(remData.monto_destino) / binanceTasa) : 0;
+        gananciaNeta = usdIn - usdOut;
+
+        const mitad = gananciaNeta / 2;
+        const cajeroOrigenId = remData.cajero_origen;
+        const cajeroDestinoId = session?.user?.id;
+
+        // Función auxiliar para sumar saldo a un cajero
+        const sumarSaldo = async (cajeroId: string, montoSumar: number) => {
+          if (!cajeroId || montoSumar === 0) return;
+          const { data: cData } = await supabase.from('perfiles_cajeros').select('saldo_acumulado').eq('id', cajeroId).single();
+          if (cData) {
+            const nuevoSaldo = (parseFloat(cData.saldo_acumulado) || 0) + montoSumar;
+            await supabase.from('perfiles_cajeros').update({ saldo_acumulado: nuevoSaldo }).eq('id', cajeroId);
+          }
+        };
+
+        if (cajeroOrigenId === cajeroDestinoId) {
+          // Si es el mismo cajero, se lleva el 100% de la comisión
+          await sumarSaldo(cajeroDestinoId, gananciaNeta);
+        } else {
+          // Repartir 50/50 entre ambos
+          if (cajeroOrigenId) await sumarSaldo(cajeroOrigenId, mitad);
+          if (cajeroDestinoId) await sumarSaldo(cajeroDestinoId, mitad);
+        }
+      }
+    } catch (e) {
+      console.error('Error calculando y repartiendo ganancias:', e);
+    }
+
     const { error } = await supabase
       .from('remesas')
       .update({
@@ -638,6 +675,7 @@ export default function App() {
         referencia_banco_emisor: bancoRef,
         referencia_venta_binance: binanceRef,
         tasa_venta_usdt: binanceTasa,
+        ganancia_neta_usd: gananciaNeta,
         fecha_pago: new Date().toISOString(),
         cajero_destino: session?.user?.id,
         ...(comprobanteUrl ? { comprobante_banco_emisor: comprobanteUrl } : {})
@@ -652,10 +690,20 @@ export default function App() {
 
   const handleRequestRetiro = async (monto: number) => {
     const fee = monto * 0.10;
+    const cajeroId = session?.user?.id;
+
+    if (cajeroId) {
+      const { data: cData } = await supabase.from('perfiles_cajeros').select('saldo_acumulado').eq('id', cajeroId).single();
+      if (cData) {
+        const nuevoSaldo = (parseFloat(cData.saldo_acumulado) || 0) - monto;
+        await supabase.from('perfiles_cajeros').update({ saldo_acumulado: nuevoSaldo }).eq('id', cajeroId);
+      }
+    }
+
     const { error } = await supabase
       .from('retiros')
       .insert({
-        cajero_id: session?.user?.id,
+        cajero_id: cajeroId,
         monto,
         fee,
         total_recibir: monto - fee,
@@ -786,11 +834,22 @@ export default function App() {
 
   const handleEditRemesaRates = async (id: number, tasaCompra: number, tasaVenta: number) => {
     addAuditLog(`Editó las tasas de la remesa TRX-${id}. Compra: ${tasaCompra}, Venta: ${tasaVenta}`);
+
+    // Recalcular la ganancia para la base de datos histórica (no afecta los saldos de caja)
+    let nuevaGanancia = 0;
+    const { data: remData } = await supabase.from('remesas').select('monto_origen, monto_destino').eq('id', id).single();
+    if (remData) {
+      const usdIn = tasaCompra > 0 ? (parseFloat(remData.monto_origen) / tasaCompra) : 0;
+      const usdOut = tasaVenta > 0 ? (parseFloat(remData.monto_destino) / tasaVenta) : 0;
+      nuevaGanancia = usdIn - usdOut;
+    }
+
     const { error } = await supabase
       .from('remesas')
       .update({
         tasa_compra_usdt: tasaCompra,
-        tasa_venta_usdt: tasaVenta
+        tasa_venta_usdt: tasaVenta,
+        ganancia_neta_usd: nuevaGanancia
       })
       .eq('id', id);
     if (error) {
@@ -899,6 +958,66 @@ export default function App() {
     if (!error) {
       triggerToast(`Datos del cajero ${data.nombre} actualizados exitosamente.`);
       fetchDatosSupabase();
+    }
+  };
+
+  const handleSyncSystem = async () => {
+    triggerToast('🔄 Iniciando sincronización profunda. Por favor, no cierres la ventana...');
+    try {
+      const { data: allRemesas, error: errRem } = await supabase.from('remesas').select('*').eq('estado', 'PAGADO');
+      if (errRem) throw errRem;
+
+      // Traer retiros pagados y pendientes (ya que el dinero pendiente está congelado/descontado)
+      const { data: allRetiros, error: errRet } = await supabase.from('retiros').select('*').in('estado', ['PAGADO', 'PENDIENTE']);
+      if (errRet) throw errRet;
+
+      const { data: allCajeros, error: errCaj } = await supabase.from('perfiles_cajeros').select('id');
+      if (errCaj) throw errCaj;
+
+      let cajeroBalances: Record<string, number> = {};
+      allCajeros.forEach((c: any) => { cajeroBalances[c.id] = 0; });
+
+      for (const rem of allRemesas) {
+        const tCompra = parseFloat(rem.tasa_compra_usdt) || 1.0;
+        const tVenta = parseFloat(rem.tasa_venta_usdt) || 1.0;
+        const usdIn = tCompra > 0 ? (parseFloat(rem.monto_origen) / tCompra) : 0;
+        const usdOut = tVenta > 0 ? (parseFloat(rem.monto_destino) / tVenta) : 0;
+
+        let ganancia = usdIn - usdOut;
+        if (tVenta === 1.0 && rem.pais_destino !== 'US' && rem.pais_destino !== 'PA') {
+          ganancia = parseFloat(rem.ganancia_neta_usd) || (usdIn * 0.05);
+        }
+
+        await supabase.from('remesas').update({ ganancia_neta_usd: ganancia }).eq('id', rem.id);
+
+        const mitad = ganancia / 2;
+        const orig = rem.cajero_origen;
+        const dest = rem.cajero_destino;
+
+        if (orig === dest) {
+          if (orig && cajeroBalances[orig] !== undefined) cajeroBalances[orig] += ganancia;
+        } else {
+          if (orig && cajeroBalances[orig] !== undefined) cajeroBalances[orig] += mitad;
+          if (dest && cajeroBalances[dest] !== undefined) cajeroBalances[dest] += mitad;
+        }
+      }
+
+      for (const ret of allRetiros) {
+        const cid = ret.cajero_id;
+        if (cid && cajeroBalances[cid] !== undefined) {
+          cajeroBalances[cid] -= parseFloat(ret.monto);
+        }
+      }
+
+      for (const cid of Object.keys(cajeroBalances)) {
+        await supabase.from('perfiles_cajeros').update({ saldo_acumulado: cajeroBalances[cid] }).eq('id', cid);
+      }
+
+      addAuditLog('Sincronizó y recalculó ganancias y saldos históricos');
+      triggerToast('✅ Sincronización completada con éxito. Base de datos perfecta.');
+      fetchDatosSupabase();
+    } catch (error: any) {
+      triggerToast(`❌ Error en sincronización: ${error.message}`);
     }
   };
 
@@ -1075,6 +1194,7 @@ export default function App() {
           onEditRemesaRates={handleEditRemesaRates}
           onToggleEstadoCajero={handleToggleEstadoCajero}
           onEditCajero={handleEditCajero}
+          onSyncSystem={handleSyncSystem}
           onClose={() => setIsAdminMode(false)}
         />
       ) : !adminEmails.includes(session?.user?.email) && cajeros.find(c => c.id === session?.user?.id)?.estado !== 'ACTIVO' ? (
@@ -1171,7 +1291,9 @@ export default function App() {
                         <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold text-xs uppercase">
                           <th className="p-4">Fecha / Cliente</th>
                           <th className="p-4">Ruta / Monto</th>
+                          <th className="p-4 text-center">Ganancia</th>
                           <th className="p-4 text-center">Estado</th>
+                          <th className="p-4 text-center">Acción</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1185,47 +1307,54 @@ export default function App() {
                               <span className="font-bold text-slate-800">{rem.origen} ➔ {rem.destino}</span>
                               <span className="block text-slate-500">Monto: {rem.simboloDestino} {rem.montoDestino.toFixed(2)}</span>
                             </td>
+                            <td className="p-4 text-center text-xs">
+                              <span className="font-bold text-emerald-600">${(rem.gananciaCalculada || 0).toFixed(2)}</span>
+                            </td>
                             <td className="p-4 text-center">
-                              <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase block w-max mx-auto mb-2 ${rem.estado === 'PAGADO' ? 'bg-emerald-100 text-emerald-700' : rem.estado === 'CANCELADO' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                              <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase inline-block ${rem.estado === 'PAGADO' ? 'bg-emerald-100 text-emerald-700' : rem.estado === 'CANCELADO' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {rem.estado}
                               </span>
-                              <button
-                                onClick={() => setSelectedTracking(rem)}
-                                className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 px-2 py-1.5 rounded font-bold transition flex items-center justify-center gap-1 mx-auto mb-2"
-                                title="Ver Detalle"
-                              >
-                                🔍 Tracking
-                              </button>
-                              {rem.estado === 'PAGADO' && (
+                            </td>
+                            <td className="p-4 text-center">
+                              <div className="flex justify-center items-center gap-2">
                                 <button
-                                  onClick={() => {
-                                    let text = `✅ *RECIBO DE OPERACIÓN*\n------------------------\n`;
-                                    text += `👤 *Cliente:* ${rem.cliente}\n`;
-                                    text += `🆔 *Transacción ID:* TRX-${rem.id}\n`;
-                                    text += `💵 *Monto Enviado:* ${rem.simboloOrigen} ${rem.montoOrigen.toFixed(2)}\n`;
-                                    text += `------------------------\n`;
-                                    rem.beneficiarios.forEach((b: any, idx: number) => {
-                                      text += `🏦 *Cuenta Destino ${rem.beneficiarios.length > 1 ? idx + 1 : ''}*\n`;
-                                      text += `*Banco:* ${b.banco}\n`;
-                                      text += `*Titular:* ${b.titular}\n`;
-                                      text += `*Referencia:* ${rem.refDestino || 'N/A'}\n`;
-                                      text += `*Monto Recibido:* ${rem.simboloDestino} ${b.monto.toFixed(2)}\n\n`;
-                                    });
-                                    text += `🚀 ¡Gracias por usar TransferCash!`;
-                                    navigator.clipboard.writeText(text);
-                                    triggerToast('Recibo copiado al portapapeles');
-                                  }}
-                                  className="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 px-2 py-1.5 rounded font-bold transition flex items-center justify-center gap-1 mx-auto"
-                                  title="Copiar Recibo"
+                                  onClick={() => setSelectedTracking(rem)}
+                                  className="text-[14px] bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 p-1.5 rounded transition"
+                                  title="Ver Tracking"
                                 >
-                                  <Copy className="w-3.5 h-3.5" /> Copiar Resumen
+                                  🔍
                                 </button>
-                              )}
+                                {rem.estado === 'PAGADO' && (
+                                  <button
+                                    onClick={() => {
+                                      let text = `✅ *RECIBO DE OPERACIÓN*\n------------------------\n`;
+                                      text += `👤 *Cliente:* ${rem.cliente}\n`;
+                                      text += `🆔 *Transacción ID:* TRX-${rem.id}\n`;
+                                      text += `💵 *Monto Enviado:* ${rem.simboloOrigen} ${rem.montoOrigen.toFixed(2)}\n`;
+                                      text += `------------------------\n`;
+                                      rem.beneficiarios.forEach((b: any, idx: number) => {
+                                        text += `🏦 *Cuenta Destino ${rem.beneficiarios.length > 1 ? idx + 1 : ''}*\n`;
+                                        text += `*Banco:* ${b.banco}\n`;
+                                        text += `*Titular:* ${b.titular}\n`;
+                                        text += `*Referencia:* ${rem.refDestino || 'N/A'}\n`;
+                                        text += `*Monto Recibido:* ${rem.simboloDestino} ${b.monto.toFixed(2)}\n\n`;
+                                      });
+                                      text += `🚀 ¡Gracias por usar TransferCash!`;
+                                      navigator.clipboard.writeText(text);
+                                      triggerToast('Recibo copiado al portapapeles');
+                                    }}
+                                    className="text-[14px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 p-1.5 rounded transition"
+                                    title="Copiar Recibo"
+                                  >
+                                    📋
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
                         {remesas.filter(r => r.cajeroOrigenId === session?.user?.id || r.cajeroDestinoId === session?.user?.id).length === 0 && (
-                          <tr><td colSpan={3} className="text-center p-8 text-slate-500">No hay transacciones en el historial.</td></tr>
+                          <tr><td colSpan={5} className="text-center p-8 text-slate-500">No hay transacciones en el historial.</td></tr>
                         )}
                       </tbody>
                     </table>

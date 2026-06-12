@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeftRight, Check, AlertCircle } from 'lucide-react';
 
 export interface PaisData {
@@ -145,11 +145,14 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
     calcularDesdeOrigen(montoOrigen);
   }, [paisOrigen, paisDestino, margen, usarWallet]);
 
+  const lastPaisOrigen = useRef(paisOrigen);
+
   useEffect(() => {
-    if (paisesData[paisOrigen]) {
+    if (paisesData[paisOrigen] && (lastPaisOrigen.current !== paisOrigen || !tasaCompraInput)) {
       setTasaCompraInput(paisesData[paisOrigen].compra.toString());
+      lastPaisOrigen.current = paisOrigen;
     }
-  }, [paisOrigen, paisesData]);
+  }, [paisOrigen, paisesData, tasaCompraInput]);
 
   useEffect(() => {
     if (!showWallet) {

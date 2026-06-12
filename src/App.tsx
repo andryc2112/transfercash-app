@@ -874,14 +874,30 @@ export default function App() {
     setPaises(updated);
   };
 
-  const handleSaveExchangeRate = async (code: string) => {
+  const handleSaveExchangeRate = async (code: string, customCompra?: number, customVenta?: number) => {
     const info = paises[code];
-    addAuditLog(`Guardó tasa manual de ${info.nombre} a Compra: ${info.compra}, Venta: ${info.venta}`);
-    localStorage.setItem('tc_paisesData', JSON.stringify(paises));
+    const finalCompra = customCompra !== undefined ? customCompra : info.compra;
+    const finalVenta = customVenta !== undefined ? customVenta : info.venta;
+
+    addAuditLog(`Guardó tasa manual de ${info.nombre} a Compra: ${finalCompra}, Venta: ${finalVenta}`);
+
+    let updatedPaises = { ...paises };
+    setPaises(prev => {
+      updatedPaises = {
+        ...prev,
+        [code]: {
+          ...prev[code],
+          compra: finalCompra,
+          venta: finalVenta
+        }
+      };
+      localStorage.setItem('tc_paisesData', JSON.stringify(updatedPaises));
+      return updatedPaises;
+    });
 
     const { error } = await supabase
       .from('configuracion_tasas')
-      .upsert({ pais_codigo: code, compra: info.compra, venta: info.venta }, { onConflict: 'pais_codigo' });
+      .upsert({ pais_codigo: code, compra: finalCompra, venta: finalVenta }, { onConflict: 'pais_codigo' });
 
     if (error) triggerToast(`Error de Servidor: ${error.message}`);
     else triggerToast(`Tasa de ${paises[code]?.nombre || code} guardada en el servidor con éxito.`);
@@ -891,10 +907,12 @@ export default function App() {
     setMargenGlobal(newMargin);
   };
 
-  const handleSaveMargenGlobal = async () => {
-    addAuditLog(`Actualizó y guardó el margen global a: ${margenGlobal}%`);
-    localStorage.setItem('tc_margenGlobal', String(margenGlobal));
-    const { error } = await supabase.from('configuracion_global').upsert({ clave: 'tc_margen_global', valor: String(margenGlobal) }, { onConflict: 'clave' });
+  const handleSaveMargenGlobal = async (customMargen?: number) => {
+    const finalMargen = customMargen !== undefined ? customMargen : margenGlobal;
+    setMargenGlobal(finalMargen);
+    addAuditLog(`Actualizó y guardó el margen global a: ${finalMargen}%`);
+    localStorage.setItem('tc_margenGlobal', String(finalMargen));
+    const { error } = await supabase.from('configuracion_global').upsert({ clave: 'tc_margen_global', valor: String(finalMargen) }, { onConflict: 'clave' });
     if (error) triggerToast(`Error de Servidor: ${error.message}`);
     else triggerToast(`Margen global guardado exitosamente en el servidor.`);
   };

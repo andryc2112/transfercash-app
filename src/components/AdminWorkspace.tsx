@@ -56,11 +56,11 @@ interface AdminWorkspaceProps {
   onUpdateTelegramChatId: (id: string) => void;
   onUpdateAdminEmails: (emails: string[]) => void;
   onUpdateMargenGlobal: (val: number) => void;
-  onSaveMargenGlobal: () => void;
+  onSaveMargenGlobal: (val?: number) => void;
   onToggleSanTab: (val: boolean) => void;
   onToggleWalletFeatures: (val: boolean) => void;
   onUpdateExchangeRate: (code: string, compra: number, venta: number) => void;
-  onSaveExchangeRate: (code: string) => void;
+  onSaveExchangeRate: (code: string, compra?: number, venta?: number) => void;
   onApproveDeposito: (id: number, binanceRef: string, binanceTasa: number) => void;
   onRejectDeposito: (id: number) => void;
   onApproveRetiro: (id: number) => void;
@@ -73,31 +73,7 @@ interface AdminWorkspaceProps {
   onClose: () => void;
 }
 
-const NumberInput = ({ value, label, onChange, className, step = "0.0001" }: { value: number, label?: string, onChange: (val: number) => void, className: string, step?: string }) => {
-  const [localVal, setLocalVal] = useState(value.toString());
 
-  useEffect(() => {
-    const numLocal = parseFloat(localVal);
-    const validNumLocal = isNaN(numLocal) ? 0 : numLocal;
-    if (validNumLocal !== value) {
-      setLocalVal(value.toString());
-    }
-  }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setLocalVal(val);
-    const parsed = parseFloat(val);
-    onChange(isNaN(parsed) ? 0 : parsed);
-  };
-
-  return (
-    <div className={label ? "space-y-1" : ""}>
-      {label && <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">{label}</label>}
-      <input type="number" step={step} value={localVal} onChange={handleChange} className={className} />
-    </div>
-  );
-};
 
 export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   remesas,
@@ -116,11 +92,9 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   telegramChatId,
   onUpdateTelegramChatId,
   onUpdateAdminEmails,
-  onUpdateMargenGlobal,
   onSaveMargenGlobal,
   onToggleSanTab,
   onToggleWalletFeatures,
-  onUpdateExchangeRate,
   onSaveExchangeRate,
   onApproveDeposito,
   onRejectDeposito,
@@ -134,6 +108,15 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   onClose
 }) => {
   const [activeTab, setActiveTab] = useState<'resumen' | 'operaciones' | 'clientes' | 'operadores' | 'retiros' | 'recargas' | 'auditoria' | 'ajustes'>('resumen');
+
+  // Estados de edición local para tasas y margen para evitar reinicios por sincronización en tiempo real
+  const [localRates, setLocalRates] = useState<Record<string, { compra: string; venta: string }>>({});
+  const [localMargin, setLocalMargin] = useState<string>(margenGlobal.toString());
+
+  // Sincronizar localMargin cuando la prop global cambia
+  useEffect(() => {
+    setLocalMargin(margenGlobal.toString());
+  }, [margenGlobal]);
 
   // Estados de modales
   const [selectedTracking, setSelectedTracking] = useState<any | null>(null);
@@ -1209,13 +1192,21 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-xs font-bold text-slate-350">
                 <span className="text-slate-400">Establecer Margen (%):</span>
                 <div className="flex gap-2">
-                  <NumberInput
+                  <input
+                    type="number"
                     step="0.1"
-                    value={margenGlobal}
-                    onChange={onUpdateMargenGlobal}
+                    value={localMargin}
+                    onChange={(e) => setLocalMargin(e.target.value)}
                     className="w-24 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center focus:outline-none focus:border-indigo-500"
                   />
-                  <button onClick={onSaveMargenGlobal} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg font-bold transition shadow-lg">
+                  <button
+                    onClick={() => {
+                      const val = parseFloat(localMargin);
+                      const finalVal = isNaN(val) ? 0 : val;
+                      onSaveMargenGlobal(finalVal);
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg font-bold transition shadow-lg"
+                  >
                     Guardar
                   </button>
                 </div>
@@ -1368,22 +1359,59 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <NumberInput
-                          label="Compra"
-                          step="0.0001"
-                          value={info.compra}
-                          onChange={(val) => onUpdateExchangeRate(code, val, info.venta)}
-                          className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
-                        />
-                        <NumberInput
-                          label="Venta"
-                          step="0.0001"
-                          value={info.venta}
-                          onChange={(val) => onUpdateExchangeRate(code, info.compra, val)}
-                          className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
-                        />
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Compra</label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={localRates[code]?.compra ?? info.compra.toString()}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalRates(prev => ({
+                                ...prev,
+                                [code]: {
+                                  compra: val,
+                                  venta: localRates[code]?.venta ?? info.venta.toString()
+                                }
+                              }));
+                            }}
+                            className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Venta</label>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            value={localRates[code]?.venta ?? info.venta.toString()}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalRates(prev => ({
+                                ...prev,
+                                [code]: {
+                                  compra: localRates[code]?.compra ?? info.compra.toString(),
+                                  venta: val
+                                }
+                              }));
+                            }}
+                            className="w-20 bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-1.5 text-center text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
                         <div className="pt-4">
-                          <button onClick={() => onSaveExchangeRate(code)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded text-[10px] font-bold uppercase transition shadow-md" title="Guardar Tasa en Servidor">
+                          <button
+                            onClick={() => {
+                              const compraVal = parseFloat(localRates[code]?.compra ?? info.compra.toString()) || 0;
+                              const ventaVal = parseFloat(localRates[code]?.venta ?? info.venta.toString()) || 0;
+                              onSaveExchangeRate(code, compraVal, ventaVal);
+                              setLocalRates(prev => {
+                                const updated = { ...prev };
+                                delete updated[code];
+                                return updated;
+                              });
+                            }}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded text-[10px] font-bold uppercase transition shadow-md"
+                            title="Guardar Tasa en Servidor"
+                          >
                             💾
                           </button>
                         </div>

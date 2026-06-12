@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { CalculadoraRemesa, defaultPaisesData } from './components/CalculadoraRemesa';
 import type { PaisData } from './components/CalculadoraRemesa';
 import { TablaPendientes } from './components/TablaPendientes';
@@ -276,7 +276,6 @@ export default function App() {
       setSession(session);
       if (session) {
         fetchDatosSupabase();
-        suscribirseCambiosSupabase();
       }
     });
 
@@ -288,6 +287,38 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // Solicitar permisos del navegador
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Referencias para leer el estado más reciente dentro de los callbacks de Supabase sin reiniciar la conexión
+  const sessionRef = useRef(session);
+  const cajeroPaisRef = useRef(cajeroPais);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  useEffect(() => {
+    cajeroPaisRef.current = cajeroPais;
+  }, [cajeroPais]);
+
+  const showBrowserNotification = (title: string, body: string) => {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "granted") {
+      new Notification(title, { body });
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          new Notification(title, { body });
+        }
+      });
+    }
+  };
 
 
   const fetchDatosSupabase = async () => {
@@ -475,16 +506,56 @@ export default function App() {
     }
   };
 
-  const suscribirseCambiosSupabase = () => {
-    supabase
+  // Controlador inteligente en tiempo real
+  useEffect(() => {
+    if (!session) return;
+
+    const channel = supabase
       .channel('realtime-tabla-pendientes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'remesas' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'remesas' }, (payload) => {
         fetchDatosSupabase();
-        triggerToast('¡Cola de remesas actualizada en tiempo real!');
+
+        if (payload.eventType === 'INSERT') {
+          const newRemesa = payload.new as any;
+          if (newRemesa.pais_destino === cajeroPaisRef.current) {
+            triggerToast('¡Nueva remesa para pagar en tu país! 💸');
+            showBrowserNotification('Nuevo Pago Pendiente 💸', `Tienes una nueva remesa para pagar por ${newRemesa.monto_destino}`);
+          } else {
+            triggerToast('¡Nueva remesa registrada en la red!');
+          }
+        } else if (payload.eventType === 'UPDATE') {
+          const newRemesa = payload.new as any;
+          if (newRemesa.estado === 'PAGADO' && newRemesa.cajero_origen === sessionRef.current?.user?.id) {
+            triggerToast('¡Tu envío ha sido pagado por el cajero destino! ✅');
+            showBrowserNotification('Operación Completada ✅', `El cajero destino completó tu envío TRX-${newRemesa.id}`);
+          } else if (newRemesa.estado === 'CANCELADO' && newRemesa.cajero_origen === sessionRef.current?.user?.id) {
+            triggerToast(`Tu remesa TRX-${newRemesa.id} fue cancelada. ❌`);
+            showBrowserNotification('Operación Cancelada ❌', `Motivo: ${newRemesa.motivo_cancelacion || 'N/A'}`);
+          } else {
+            triggerToast('¡Cola de remesas actualizada!');
+          }
+        }
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'depositos' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'depositos' }, (payload) => {
         fetchDatosSupabase();
-        triggerToast('¡Recargas actualizadas en tiempo real!');
+        if (payload.eventType === 'INSERT') {
+          triggerToast('¡Nueva solicitud de recarga web! 📥');
+        } else if (payload.eventType === 'UPDATE') {
+          triggerToast('¡Estado de recarga actualizado!');
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'retiros' }, (payload) => {
+        fetchDatosSupabase();
+        const newRetiro = payload.new as any;
+        if (newRetiro.cajero_id === sessionRef.current?.user?.id) {
+          if (newRetiro.estado === 'PAGADO') {
+            triggerToast('¡Tu retiro ha sido aprobado y pagado! 💸');
+            showBrowserNotification('Retiro Aprobado 💸', `Tu retiro de $${newRetiro.monto} ha sido completado exitosamente.`);
+          } else if (newRetiro.estado === 'RECHAZADO') {
+            triggerToast('Tu solicitud de retiro fue rechazada. ❌');
+            showBrowserNotification('Retiro Rechazado ❌', `Los fondos han sido devueltos a tu caja.`);
+          }
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'configuracion_global' }, () => {
         fetchDatosSupabase();
@@ -499,7 +570,11 @@ export default function App() {
         triggerToast('¡Nuevo cajero registrado o modificado!');
       })
       .subscribe();
-  };
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
 
   const triggerToast = (msg: string) => {
     setNotificationMsg(msg);

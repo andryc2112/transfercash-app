@@ -4,7 +4,7 @@ import type { PaisData } from './components/CalculadoraRemesa';
 import { TablaPendientes } from './components/TablaPendientes';
 import { SeccionRetiros } from './components/SeccionRetiros';
 import { SeccionSan } from './components/SeccionSan';
-import { LogOut, Bell, Settings, Copy } from 'lucide-react';
+import { LogOut, Bell, Settings } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { AdminWorkspace } from './components/AdminWorkspace';
 import type { Cliente, CajeroPerfil } from './components/AdminWorkspace';
@@ -507,6 +507,28 @@ export default function App() {
     setTimeout(() => {
       setShowNotificationToast(false);
     }, 4500);
+  };
+
+  const handleBuscarCliente = async (cedula: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('cedula_dni', cedula)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        triggerToast(`✅ Cliente ${data.nombre} encontrado.`);
+        return data;
+      } else {
+        triggerToast(`ℹ️ Cliente nuevo. Se guardará automáticamente al registrar.`);
+        return null;
+      }
+    } catch (err: any) {
+      triggerToast(`❌ Error buscando cliente: ${err.message}`);
+      return null;
+    }
   };
 
   const handleRegisterOperation = async (data: any): Promise<boolean> => {
@@ -1248,6 +1270,7 @@ export default function App() {
             {activeTab === 'calculadora' && (
               <CalculadoraRemesa
                 onRegisterOperation={handleRegisterOperation}
+                onBuscarCliente={handleBuscarCliente}
                 showWallet={showWalletFeatures}
                 paisesData={paises}
                 margen={margenGlobal}

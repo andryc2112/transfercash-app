@@ -142,8 +142,8 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
   };
 
   useEffect(() => {
-    calcularDesdeOrigen();
-  }, [paisOrigen, paisDestino, montoOrigen, margen, usarWallet]);
+    calcularDesdeOrigen(montoOrigen);
+  }, [paisOrigen, paisDestino, margen, usarWallet]);
 
   useEffect(() => {
     if (paisesData[paisOrigen]) {
@@ -157,10 +157,10 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
     }
   }, [showWallet]);
 
-  const calcularDesdeOrigen = () => {
+  const calcularDesdeOrigen = (valorMontoOrigen: string = montoOrigen) => {
     const origData = paisesData[paisOrigen];
     const destData = paisesData[paisDestino];
-    const monto = parseFloat(montoOrigen);
+    const monto = parseFloat(valorMontoOrigen);
 
     if (!isNaN(monto) && origData && destData && origData.compra > 0) {
       let usdt = 0;
@@ -184,7 +184,15 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
 
       const tasaImpl = neto / (usarWallet ? 1 : monto);
       setTasaVenta(tasaImpl.toFixed(6));
+    } else if (valorMontoOrigen === '') {
+      setMontoDestino('');
+      setTasaVenta('0');
     }
+  };
+
+  const handleMontoOrigenChange = (val: string) => {
+    setMontoOrigen(val);
+    calcularDesdeOrigen(val);
   };
 
   const handleMontoDestinoChange = (val: string) => {
@@ -213,6 +221,9 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
 
       const tasaImpl = montoDest / (usarWallet ? usdt : montoOrig);
       setTasaVenta(tasaImpl.toFixed(6));
+    } else if (val === '') {
+      setMontoOrigen('');
+      setTasaVenta('0');
     }
   };
 
@@ -454,7 +465,7 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
                       step="0.01"
                       required
                       value={montoOrigen}
-                      onChange={(e) => setMontoOrigen(e.target.value)}
+                      onChange={(e) => handleMontoOrigenChange(e.target.value)}
                       className="w-full bg-white rounded-lg border border-slate-200 p-2.5 pr-12 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                     />
                     <span className="absolute right-3 top-3 text-xs font-bold text-slate-400">

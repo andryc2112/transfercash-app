@@ -66,6 +66,7 @@ interface AdminWorkspaceProps {
   onApproveRetiro: (id: number) => void;
   onRejectRetiro: (id: number) => void;
   onCancelRemesa: (id: number, motivo: string) => void;
+  onEditRemesaRates: (id: number, tasaCompra: number, tasaVenta: number) => void;
   onToggleEstadoCajero: (id: string, estado: string) => void;
   onEditCajero: (id: string, data: Partial<CajeroPerfil>) => void;
   onClose: () => void;
@@ -125,6 +126,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   onApproveRetiro,
   onRejectRetiro,
   onCancelRemesa,
+  onEditRemesaRates,
   onToggleEstadoCajero,
   onEditCajero,
   onClose
@@ -135,6 +137,10 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   const [selectedTracking, setSelectedTracking] = useState<any | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [cancelMotivo, setCancelMotivo] = useState('');
+
+  const [editingRemesaRates, setEditingRemesaRates] = useState<any | null>(null);
+  const [editTasaCompra, setEditTasaCompra] = useState('1');
+  const [editTasaVenta, setEditTasaVenta] = useState('1');
 
   // Filtros de operaciones
   const [searchTerm, setSearchTerm] = useState('');
@@ -833,6 +839,16 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                                 className="bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px] font-bold py-1.5 px-3 rounded-lg border border-slate-800 transition"
                               >
                                 🔍 Tracking
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingRemesaRates(rem);
+                                  setEditTasaCompra(rem.tasaCompra?.toString() || '1');
+                                  setEditTasaVenta(rem.tasaVenta?.toString() || '1');
+                                }}
+                                className="bg-sky-950/20 hover:bg-sky-950/60 text-sky-400 text-[10px] font-bold py-1 px-3 rounded-lg border border-sky-950/50 transition"
+                              >
+                                ✏️ Editar Tasas
                               </button>
                               {rem.estado !== 'CANCELADO' && (
                                 <button
@@ -1767,6 +1783,53 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               <div className="flex gap-3 pt-4 border-t border-slate-800">
                 <button type="button" onClick={() => setEditingCajero(null)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cancelar</button>
                 <button type="submit" className="w-2/3 py-2.5 rounded-lg font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-lg shadow-indigo-600/20 text-xs uppercase">Guardar Cambios ✅</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR TASAS DE REMESA */}
+      {editingRemesaRates && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-sky-600 text-white p-5 flex justify-between items-center">
+              <h3 className="font-bold text-base uppercase tracking-wider flex items-center gap-2">
+                ✏️ Editar Tasas (TRX-{editingRemesaRates.id})
+              </h3>
+              <button onClick={() => setEditingRemesaRates(null)} className="text-white hover:text-sky-100 text-2xl font-bold">&times;</button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              onEditRemesaRates(editingRemesaRates.id, parseFloat(editTasaCompra) || 1, parseFloat(editTasaVenta) || 1);
+              setEditingRemesaRates(null);
+            }} className="p-6 space-y-4">
+              <p className="text-xs text-slate-400">Corrige las tasas de Binance asociadas a esta transacción para recalcular la ganancia histórica.</p>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase">Tasa de Compra (Origen)</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  required
+                  value={editTasaCompra}
+                  onChange={(e) => setEditTasaCompra(e.target.value)}
+                  className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-sm font-bold"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase">Tasa de Venta (Destino)</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  required
+                  value={editTasaVenta}
+                  onChange={(e) => setEditTasaVenta(e.target.value)}
+                  className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-sm font-bold"
+                />
+              </div>
+              <div className="flex gap-3 pt-4 border-t border-slate-800">
+                <button type="button" onClick={() => setEditingRemesaRates(null)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cancelar</button>
+                <button type="submit" className="w-2/3 py-2.5 rounded-lg font-extrabold bg-sky-600 hover:bg-sky-700 text-white transition shadow-lg shadow-sky-600/20 text-xs uppercase">Guardar Cambios</button>
               </div>
             </form>
           </div>

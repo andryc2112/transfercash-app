@@ -784,6 +784,23 @@ export default function App() {
     }
   };
 
+  const handleEditRemesaRates = async (id: number, tasaCompra: number, tasaVenta: number) => {
+    addAuditLog(`Editó las tasas de la remesa TRX-${id}. Compra: ${tasaCompra}, Venta: ${tasaVenta}`);
+    const { error } = await supabase
+      .from('remesas')
+      .update({
+        tasa_compra_usdt: tasaCompra,
+        tasa_venta_usdt: tasaVenta
+      })
+      .eq('id', id);
+    if (error) {
+      triggerToast(`❌ Error al editar tasas: ${error.message}`);
+    } else {
+      triggerToast('✅ Tasas de la remesa actualizadas correctamente.');
+      fetchDatosSupabase();
+    }
+  };
+
   const handleRejectDeposito = async (id: number) => {
     addAuditLog(`Rechazó la solicitud de recarga web ID ${id}`);
 
@@ -1055,6 +1072,7 @@ export default function App() {
           onApproveRetiro={handleApproveRetiro}
           onRejectRetiro={handleRejectRetiro}
           onCancelRemesa={handleCancelRemesa}
+          onEditRemesaRates={handleEditRemesaRates}
           onToggleEstadoCajero={handleToggleEstadoCajero}
           onEditCajero={handleEditCajero}
           onClose={() => setIsAdminMode(false)}

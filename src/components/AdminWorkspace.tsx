@@ -22,6 +22,13 @@ export interface Cliente {
   wallet_saldo: number;
 }
 
+export interface BancoCuentaConfig {
+  banco: string;
+  cuenta: string;
+  titular: string;
+  cedula: string;
+}
+
 export interface CajeroPerfil {
   id: string;
   nombre: string;
@@ -36,6 +43,7 @@ export interface CajeroPerfil {
   banco_titular?: string;
   banco_cedula?: string;
   binance_wallet?: string;
+  bancoConfig?: Record<string, BancoCuentaConfig>;
 }
 
 interface AdminWorkspaceProps {
@@ -2102,14 +2110,80 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                   })}
                 </div>
               </div>
-              <h4 className="text-indigo-400 font-black text-[10px] uppercase tracking-widest pt-2 border-t border-slate-800">Cuentas Bancarias / Binance</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase">Banco Local</label><input type="text" value={editCajeroForm.banco_nombre || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, banco_nombre: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs" /></div>
-                <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase">Número Cuenta</label><input type="text" value={editCajeroForm.banco_cuenta || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, banco_cuenta: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs" /></div>
-                <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase">Titular Banco</label><input type="text" value={editCajeroForm.banco_titular || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, banco_titular: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs" /></div>
-                <div className="space-y-1"><label className="text-[9px] font-bold text-slate-500 uppercase">Doc. Titular</label><input type="text" value={editCajeroForm.banco_cedula || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, banco_cedula: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs" /></div>
+              <h4 className="text-indigo-400 font-black text-[10px] uppercase tracking-widest pt-2 border-t border-slate-800">Cuentas Bancarias por País / Canal</h4>
+              <div className="space-y-4 max-h-[260px] overflow-y-auto pr-1">
+                {(editCajeroForm.pais_operacion || '').split(',').map(p => p.trim()).filter(Boolean).map(code => {
+                  const info = paises[code] || { nombre: code, flag: '🏳️' };
+                  const config = editCajeroForm.bancoConfig?.[code] || { banco: '', cuenta: '', titular: '', cedula: '' };
+                  const updateConfig = (field: keyof BancoCuentaConfig, value: string) => {
+                    const nextConfig = {
+                      ...(editCajeroForm.bancoConfig || {}),
+                      [code]: {
+                        ...config,
+                        [field]: value
+                      }
+                    };
+                    setEditCajeroForm({
+                      ...editCajeroForm,
+                      bancoConfig: nextConfig
+                    });
+                  };
+
+                  return (
+                    <div key={code} className="bg-slate-900/60 border border-slate-800/80 p-3 rounded-xl space-y-2">
+                      <span className="text-[10px] font-black text-indigo-350 uppercase flex items-center gap-1.5 border-b border-slate-800/60 pb-1.5">
+                        {info.flag} {info.nombre} ({code})
+                      </span>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="space-y-0.5">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase">Banco / Proveedor</label>
+                          <input
+                            type="text"
+                            placeholder="Ej: Banesco / Yappy"
+                            value={config.banco}
+                            onChange={e => updateConfig('banco', e.target.value)}
+                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase">Número Cuenta / Teléfono</label>
+                          <input
+                            type="text"
+                            placeholder="0102... / +58412..."
+                            value={config.cuenta}
+                            onChange={e => updateConfig('cuenta', e.target.value)}
+                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase">Titular</label>
+                          <input
+                            type="text"
+                            placeholder="Nombre del Titular"
+                            value={config.titular}
+                            onChange={e => updateConfig('titular', e.target.value)}
+                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase">Identificación (ID/DNI)</label>
+                          <input
+                            type="text"
+                            placeholder="V-12345678"
+                            value={config.cedula}
+                            onChange={e => updateConfig('cedula', e.target.value)}
+                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {(editCajeroForm.pais_operacion || '').split(',').map(p => p.trim()).filter(Boolean).length === 0 && (
+                  <span className="text-[10px] text-slate-500 italic block text-center py-2">Por favor, asigna al menos un país para configurar cuentas bancarias.</span>
+                )}
               </div>
-              <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Binance Wallet / Pay ID</label><input type="text" value={editCajeroForm.binance_wallet || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, binance_wallet: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm" /></div>
+              <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Binance Wallet / Pay ID (Global)</label><input type="text" value={editCajeroForm.binance_wallet || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, binance_wallet: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold" /></div>
               <div className="flex gap-3 pt-4 border-t border-slate-800">
                 <button type="button" onClick={() => setEditingCajero(null)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cancelar</button>
                 <button type="submit" className="w-2/3 py-2.5 rounded-lg font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-lg shadow-indigo-600/20 text-xs uppercase">Guardar Cambios ✅</button>

@@ -7,7 +7,7 @@ import { SeccionSan } from './components/SeccionSan';
 import { LogOut, Bell, Settings } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { AdminWorkspace } from './components/AdminWorkspace';
-import type { Cliente, CajeroPerfil } from './components/AdminWorkspace';
+import type { Cliente, CajeroPerfil, BancoCuentaConfig } from './components/AdminWorkspace';
 
 interface Deposito {
   id: number;
@@ -115,6 +115,9 @@ export default function App() {
 
   // Workspace Admin
   const [isAdminMode, setIsAdminMode] = useState(false);
+  const [isEditingSelfBanks, setIsEditingSelfBanks] = useState(false);
+  const [selfBanksForm, setSelfBanksForm] = useState<Partial<CajeroPerfil>>({});
+
   const [cajeros, setCajeros] = useState<CajeroPerfil[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [saldoEmpresa, setSaldoEmpresa] = useState(25.00);
@@ -226,6 +229,15 @@ export default function App() {
   const [authBancoCedula, setAuthBancoCedula] = useState('');
   const [authBinanceWallet, setAuthBinanceWallet] = useState('');
 
+  useEffect(() => {
+    if (isEditingSelfBanks && session?.user) {
+      const miPerfil = cajeros.find(c => c.id === session.user.id);
+      if (miPerfil) {
+        setSelfBanksForm(JSON.parse(JSON.stringify(miPerfil)));
+      }
+    }
+  }, [isEditingSelfBanks, cajeros, session]);
+
   // Notificaciones
   const [showNotificationToast, setShowNotificationToast] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState('');
@@ -304,16 +316,44 @@ export default function App() {
       cajerosData.forEach((c: any) => {
         cajeroMap[c.id] = c.apellido ? `${c.nombre} ${c.apellido}` : c.nombre;
       });
-      setCajeros(cajerosData.map((c: any) => ({
-        id: c.id,
-        nombre: c.apellido ? `${c.nombre} ${c.apellido}` : c.nombre,
-        email: c.binance_email || 'cajero@transfercash.com',
-        pais_operacion: c.pais_operacion,
-        saldo_acumulado: parseFloat(c.saldo_acumulado) || 0,
-        reputacion_san: c.reputacion_san || 0,
-        nivel_san: c.nivel_san || 'Bronce',
-        estado: c.estado || 'PENDIENTE',
-      })));
+      setCajeros(cajerosData.map((c: any) => {
+        let bancoConfig: Record<string, BancoCuentaConfig> = {};
+        if (c.banco_cuenta && c.banco_cuenta.startsWith('{')) {
+          try {
+            bancoConfig = JSON.parse(c.banco_cuenta);
+          } catch (e) {
+            console.error("Error parsing bank config:", e);
+          }
+        } else {
+          // Fallback legacy
+          const firstPais = (c.pais_operacion || 'VE').split(',')[0].trim();
+          bancoConfig = {
+            [firstPais]: {
+              banco: c.banco_nombre || '',
+              cuenta: c.banco_cuenta || '',
+              titular: c.banco_titular || '',
+              cedula: c.banco_cedula || ''
+            }
+          };
+        }
+
+        return {
+          id: c.id,
+          nombre: c.apellido ? `${c.nombre} ${c.apellido}` : c.nombre,
+          email: c.binance_email || 'cajero@transfercash.com',
+          pais_operacion: c.pais_operacion,
+          saldo_acumulado: parseFloat(c.saldo_acumulado) || 0,
+          reputacion_san: c.reputacion_san || 0,
+          nivel_san: c.nivel_san || 'Bronce',
+          estado: c.estado || 'PENDIENTE',
+          banco_nombre: c.banco_nombre || '',
+          banco_cuenta: c.banco_cuenta || '',
+          banco_titular: c.banco_titular || '',
+          banco_cedula: c.banco_cedula || '',
+          binance_wallet: c.binance_wallet || '',
+          bancoConfig
+        };
+      }));
 
       if (currentSession?.user) {
         const miPerfil = cajerosData.find((c: any) => c.id === currentSession.user.id);
@@ -1194,15 +1234,23 @@ export default function App() {
 
   const handleEditCajero = async (id: string, data: Partial<CajeroPerfil>) => {
     addAuditLog(`Editó los datos del cajero ${data.nombre}`);
+    
+    // Serializar el bancoConfig completo como JSON en el campo banco_cuenta
+    const serializedBancos = JSON.stringify(data.bancoConfig || {});
+    
+    // Detalles del primer país para compatibilidad con código antiguo y WP
+    const firstPais = (data.pais_operacion || 'VE').split(',')[0].trim();
+    const firstConfig = data.bancoConfig?.[firstPais] || { banco: '', cuenta: '', titular: '', cedula: '' };
+
     const { error } = await supabase
       .from('perfiles_cajeros')
       .update({
         nombre: data.nombre,
         pais_operacion: data.pais_operacion,
-        banco_nombre: data.banco_nombre,
-        banco_cuenta: data.banco_cuenta,
-        banco_titular: data.banco_titular,
-        banco_cedula: data.banco_cedula,
+        banco_nombre: firstConfig.banco,
+        banco_cuenta: serializedBancos,
+        banco_titular: firstConfig.titular,
+        banco_cedula: firstConfig.cedula,
         binance_wallet: data.binance_wallet
       })
       .eq('id', id);
@@ -1474,19 +1522,31 @@ export default function App() {
               <div>
                 <h1 className="text-sm font-black tracking-wide text-white uppercase">TransferCash</h1>
                 <span className="text-[10px] bg-slate-900 px-2 py-0.5 rounded text-indigo-400 font-bold border border-indigo-950/80">
-                  Cajero: Venezuela 🇻🇪
+                  Cajero: {cajeroPais ? cajeroPais.split(',').map(p => {
+                    const code = p.trim();
+                    const info = paises[code] || defaultPaisesData[code];
+                    return info ? `${info.flag} ${info.nombre}` : code;
+                  }).join(', ') : 'Ninguno'}
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
-              {adminEmails.includes(session?.user?.email) && (
+              {adminEmails.includes(session?.user?.email) ? (
                 <button
                   onClick={() => setIsAdminMode(true)}
                   title="Workspace de Administración"
                   className="text-slate-400 hover:text-indigo-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900 flex items-center gap-1.5 text-xs font-bold"
                 >
                   <Settings className="w-3.5 h-3.5 text-indigo-400" /> Admin
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsEditingSelfBanks(true)}
+                  title="Configurar mis cuentas de banco"
+                  className="text-slate-400 hover:text-indigo-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900 flex items-center gap-1.5 text-xs font-bold"
+                >
+                  🏦 Mis Bancos
                 </button>
               )}
               <div className="hidden sm:flex flex-col text-right">
@@ -1759,6 +1819,132 @@ export default function App() {
             <div className="bg-slate-900 border-t border-slate-800 p-5 flex justify-end">
               <button onClick={() => setSelectedTracking(null)} className="px-6 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold uppercase transition">Cerrar Detalle</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: AUTOGESTIÓN DE CUENTAS DEL PROPIO CAJERO */}
+      {isEditingSelfBanks && selfBanksForm && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 text-slate-100">
+            <div className="bg-indigo-600 text-white p-5 flex justify-between items-center flex-shrink-0">
+              <h3 className="font-bold text-base uppercase tracking-wider flex items-center gap-2">
+                🏦 Configurar Mis Cuentas de Banco
+              </h3>
+              <button onClick={() => setIsEditingSelfBanks(false)} className="text-white hover:text-indigo-100 text-2xl font-bold">&times;</button>
+            </div>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (session?.user?.id) {
+                await handleEditCajero(session.user.id, selfBanksForm);
+                setIsEditingSelfBanks(false);
+              }
+            }} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-none text-slate-100">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Mi Nombre</label>
+                <input
+                  type="text"
+                  required
+                  value={selfBanksForm.nombre || ''}
+                  onChange={e => setSelfBanksForm({ ...selfBanksForm, nombre: e.target.value })}
+                  className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold"
+                />
+              </div>
+
+              <h4 className="text-indigo-400 font-black text-[10px] uppercase tracking-widest pt-2 border-t border-slate-800">Cuentas Bancarias por País / Canal</h4>
+              <div className="space-y-4 max-h-[260px] overflow-y-auto pr-1">
+                {(selfBanksForm.pais_operacion || '').split(',').map(p => p.trim()).filter(Boolean).map(code => {
+                  const info = paises[code] || { nombre: code, flag: '🏳️' };
+                  const config = selfBanksForm.bancoConfig?.[code] || { banco: '', cuenta: '', titular: '', cedula: '' };
+                  const updateConfig = (field: keyof BancoCuentaConfig, value: string) => {
+                    const nextConfig = {
+                      ...(selfBanksForm.bancoConfig || {}),
+                      [code]: {
+                        ...config,
+                        [field]: value
+                      }
+                    };
+                    setSelfBanksForm({
+                      ...selfBanksForm,
+                      bancoConfig: nextConfig
+                    });
+                  };
+
+                  return (
+                    <div key={code} className="bg-slate-900/60 border border-slate-800/80 p-3 rounded-xl space-y-2">
+                      <span className="text-[10px] font-black text-indigo-350 uppercase flex items-center gap-1.5 border-b border-slate-800/60 pb-1.5">
+                        {info.flag} {info.nombre} ({code})
+                      </span>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="space-y-0.5">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase">Banco / Proveedor</label>
+                          <input
+                            type="text"
+                            placeholder="Ej: Banesco / Yappy"
+                            value={config.banco}
+                            onChange={e => updateConfig('banco', e.target.value)}
+                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase">Número Cuenta / Teléfono</label>
+                          <input
+                            type="text"
+                            placeholder="0102... / +58412..."
+                            value={config.cuenta}
+                            onChange={e => updateConfig('cuenta', e.target.value)}
+                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase">Titular</label>
+                          <input
+                            type="text"
+                            placeholder="Nombre del Titular"
+                            value={config.titular}
+                            onChange={e => updateConfig('titular', e.target.value)}
+                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase">Identificación (ID/DNI)</label>
+                          <input
+                            type="text"
+                            placeholder="V-12345678"
+                            value={config.cedula}
+                            onChange={e => updateConfig('cedula', e.target.value)}
+                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {(selfBanksForm.pais_operacion || '').split(',').map(p => p.trim()).filter(Boolean).length === 0 && (
+                  <span className="text-[10px] text-slate-500 italic block text-center py-2">No tienes países asignados para configurar bancos.</span>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Binance Wallet / Pay ID (Global)</label>
+                <input
+                  type="text"
+                  required
+                  value={selfBanksForm.binance_wallet || ''}
+                  onChange={e => setSelfBanksForm({ ...selfBanksForm, binance_wallet: e.target.value })}
+                  className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-slate-800">
+                <button type="button" onClick={() => setIsEditingSelfBanks(false)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cancelar</button>
+                <button type="submit" className="w-2/3 py-2.5 rounded-lg font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-lg shadow-indigo-600/20 text-xs uppercase">Guardar Cambios ✅</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

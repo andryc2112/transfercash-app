@@ -66,10 +66,13 @@ interface AdminWorkspaceProps {
   onApproveRetiro: (id: number) => void;
   onRejectRetiro: (id: number) => void;
   onCancelRemesa: (id: number, motivo: string) => void;
-  onEditRemesaRates: (id: number, tasaCompra: number, tasaVenta: number) => void;
+  onEditRemesa: (id: number, data: any) => void;
+  onEditCliente: (id: string, data: Partial<Cliente>) => void;
   onToggleEstadoCajero: (id: string, estado: string) => void;
   onEditCajero: (id: string, data: Partial<CajeroPerfil>) => void;
   onSyncSystem: () => Promise<void>;
+  initialTab?: string;
+  initialSearch?: string;
   onClose: () => void;
 }
 
@@ -101,13 +104,16 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   onApproveRetiro,
   onRejectRetiro,
   onCancelRemesa,
-  onEditRemesaRates,
+  onEditRemesa,
+  onEditCliente,
   onToggleEstadoCajero,
   onEditCajero,
   onSyncSystem,
+  initialTab,
+  initialSearch,
   onClose
 }) => {
-  const [activeTab, setActiveTab] = useState<'resumen' | 'operaciones' | 'clientes' | 'operadores' | 'retiros' | 'recargas' | 'auditoria' | 'ajustes'>('resumen');
+  const [activeTab, setActiveTab] = useState<any>(initialTab || 'resumen');
 
   // Estados de edición local para tasas y margen para evitar reinicios por sincronización en tiempo real
   const [localRates, setLocalRates] = useState<Record<string, { compra: string; venta: string }>>({});
@@ -123,12 +129,42 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [cancelMotivo, setCancelMotivo] = useState('');
 
-  const [editingRemesaRates, setEditingRemesaRates] = useState<any | null>(null);
-  const [editTasaCompra, setEditTasaCompra] = useState('1');
-  const [editTasaVenta, setEditTasaVenta] = useState('1');
+  // Modales de Remesa, Cliente y Operadores
+  const [editingRemesa, setEditingRemesa] = useState<any | null>(null);
+  const [editRemesaForm, setEditRemesaForm] = useState<any>({});
+
+  const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  const [editClienteForm, setEditClienteForm] = useState<Partial<Cliente>>({});
+  const [viewingClienteHistory, setViewingClienteHistory] = useState<Cliente | null>(null);
+
+  const [viewingCajeroHistory, setViewingCajeroHistory] = useState<CajeroPerfil | null>(null);
+
+  useEffect(() => {
+    if (editingRemesa) {
+      setEditRemesaForm({
+        montoOrigen: editingRemesa.montoOrigen,
+        montoDestino: editingRemesa.montoDestino,
+        tasaCompra: editingRemesa.tasaCompra || 1,
+        tasaVenta: editingRemesa.tasaVenta || 1,
+        tasaVentaAplicada: editingRemesa.tasaVentaAplicada || 1,
+        refOrigen: editingRemesa.refOrigen || '',
+        refDestino: editingRemesa.refDestino || '',
+        refBinanceCompra: editingRemesa.refBinanceCompra || '',
+        refBinanceVenta: editingRemesa.refBinanceVenta || '',
+        estado: editingRemesa.estado || 'PENDIENTE',
+        motivoCancelacion: editingRemesa.motivoCancelacion || '',
+      });
+    }
+  }, [editingRemesa]);
+
+  useEffect(() => {
+    if (editingCliente) {
+      setEditClienteForm(editingCliente);
+    }
+  }, [editingCliente]);
 
   // Filtros de operaciones
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearch || '');
   const [statusFilter, setStatusFilter] = useState('');
   const [adminInput, setAdminInput] = useState(adminEmails.join(', '));
   const [tgInput, setTgInput] = useState(telegramChatId);
@@ -230,50 +266,48 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
     });
   }, [remesas, searchTerm, statusFilter]);
 
-  // Calcular datos para gráficos semanales
+  // Calcular datos para gráficos semanales basándose en los últimos 7 días reales de la base de datos
   const chartsData = useMemo(() => {
     const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-    const volumeByDay = [0, 0, 0, 0, 0, 0, 0];
-    const profitByDay = [0, 0, 0, 0, 0, 0, 0];
+    const labels: string[] = [];
+    const volumeValues: number[] = [0, 0, 0, 0, 0, 0, 0];
+    const profitValues: number[] = [0, 0, 0, 0, 0, 0, 0];
 
-    // Obtener día de la semana actual
-    const todayIndex = new Date().getDay();
+    const today = new Date();
+    // Generar fechas para los últimos 7 días (índice 0 es hace 6 días, índice 6 es hoy)
+    const last7DaysDates: Date[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      last7DaysDates.push(d);
+      labels.push(days[d.getDay()]);
+    }
 
-    // Valores base de ejemplo (volumen/ganancia de referencia) para poblar el gráfico
-    const baseVolumes = [420, 580, 720, 910, 1100, 1420, 850];
-    const baseProfits = [21.5, 29.0, 36.5, 45.0, 55.0, 71.0, 42.5];
-
-    // Sumar transacciones reales
     remesas.forEach(r => {
       if (r.estado === 'PAGADO') {
         const tCompra = r.tasaCompra || 1.0;
         const usdIn = tCompra > 0 ? (r.montoOrigen / tCompra) : 0;
-        // Asignar a un día semi-aleatorio basado en el ID para consistencia visual
-        const dayIdx = (r.id % 7);
-        volumeByDay[dayIdx] += usdIn;
 
         const tVenta = r.tasaVenta || 1.0;
         const usdOut = tVenta > 0 ? (r.montoDestino / tVenta) : 0;
         const profit = tVenta === 1.0 && r.destino !== 'US' ? (r.gananciaCalculada || usdIn * 0.05) : (usdIn - usdOut);
-        profitByDay[dayIdx] += profit;
+
+        // Encontrar a cuál de los últimos 7 días pertenece la remesa en base a su fecha de creación
+        const rDate = r.created_at ? new Date(r.created_at) : new Date(r.fecha);
+        for (let i = 0; i < 7; i++) {
+          const d = last7DaysDates[i];
+          if (
+            rDate.getDate() === d.getDate() &&
+            rDate.getMonth() === d.getMonth() &&
+            rDate.getFullYear() === d.getFullYear()
+          ) {
+            volumeValues[i] += usdIn;
+            profitValues[i] += profit;
+            break;
+          }
+        }
       }
     });
-
-    // Combinar base con real
-    const finalVolume = volumeByDay.map((val, idx) => val + baseVolumes[idx]);
-    const finalProfit = profitByDay.map((val, idx) => val + baseProfits[idx]);
-
-    // Reordenar los días para que terminen en "Hoy"
-    const labels: string[] = [];
-    const volumeValues: number[] = [];
-    const profitValues: number[] = [];
-
-    for (let i = 6; i >= 0; i--) {
-      const targetIdx = (todayIndex - i + 7) % 7;
-      labels.push(days[targetIdx]);
-      volumeValues.push(finalVolume[targetIdx]);
-      profitValues.push(finalProfit[targetIdx]);
-    }
 
     return { labels, volumeValues, profitValues };
   }, [remesas]);
@@ -828,12 +862,10 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                               </button>
                               <button
                                 onClick={() => {
-                                  setEditingRemesaRates(rem);
-                                  setEditTasaCompra(rem.tasaCompra?.toString() || '1');
-                                  setEditTasaVenta(rem.tasaVenta?.toString() || '1');
+                                  setEditingRemesa(rem);
                                 }}
                                 className="text-[14px] bg-sky-950/20 hover:bg-sky-950/60 text-sky-400 p-1.5 rounded-lg border border-sky-950/50 transition"
-                                title="Editar Tasas"
+                                title="Editar Operación"
                               >
                                 ✏️
                               </button>
@@ -883,6 +915,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                     <th className="p-4 text-center">Operaciones</th>
                     <th className="p-4 text-right">Volumen Enviado</th>
                     <th className="p-4 text-right">Saldo Billetera (Wallet)</th>
+                    <th className="p-4 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40">
@@ -903,6 +936,27 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                         <td className="p-4 text-right font-bold text-emerald-400">${cliTotalSentUsd.toFixed(2)} USD</td>
                         <td className="p-4 text-right font-black text-purple-400">
                           ${cli.wallet_saldo.toFixed(2)} USD
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex justify-center items-center gap-2">
+                            <button
+                              onClick={() => setViewingClienteHistory(cli)}
+                              className="text-[12px] bg-slate-900 hover:bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-800 transition font-bold"
+                              title="Ver Historial"
+                            >
+                              🔍 Historial
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingCliente(cli);
+                                setEditClienteForm(cli);
+                              }}
+                              className="text-[12px] bg-indigo-950/20 hover:bg-indigo-950/60 text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-950/50 transition font-bold"
+                              title="Editar Datos"
+                            >
+                              ✏️ Editar
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -950,7 +1004,11 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                           <span className="text-[10px] text-slate-500">{c.email}</span>
                         </td>
                         <td className="p-4 font-bold text-slate-300">
-                          {paises[c.pais_operacion]?.flag || '🌍'} {paises[c.pais_operacion]?.nombre || c.pais_operacion}
+                          {(c.pais_operacion || '').split(',').map(code => {
+                            const trimmed = code.trim();
+                            const info = paises[trimmed];
+                            return info ? `${info.flag} ${trimmed}` : trimmed;
+                          }).join(', ')}
                         </td>
                         <td className="p-4">
                           <span className="text-indigo-400 font-black text-sm">${c.saldo_acumulado.toFixed(2)}</span>
@@ -959,12 +1017,13 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                           ${totalGenerado.toFixed(2)}
                         </td>
                         <td className="p-4 text-center">
-                          <div className="flex gap-2 justify-center">
+                          <div className="flex gap-2 justify-center items-center">
                             {c.estado === 'ACTIVO' ? (
                               <button onClick={() => onToggleEstadoCajero(c.id, 'PENDIENTE')} className="bg-emerald-500/10 text-emerald-400 border border-emerald-950 px-3 py-1 rounded-full text-[10px] font-black uppercase hover:bg-emerald-500/20 transition">Activo ✅</button>
                             ) : (
                               <button onClick={() => onToggleEstadoCajero(c.id, 'ACTIVO')} className="bg-amber-500/10 text-amber-400 border border-amber-950 px-3 py-1 rounded-full text-[10px] font-black uppercase hover:bg-amber-500/20 transition">Aprobar ⏳</button>
                             )}
+                            <button onClick={() => setViewingCajeroHistory(c)} className="bg-slate-900 hover:bg-slate-800 text-slate-300 p-1.5 rounded-lg border border-slate-800 transition" title="Ver Historial">🔍</button>
                             <button onClick={() => setEditingCajero(c)} className="bg-indigo-500/10 text-indigo-400 border border-indigo-950 px-3 py-1 rounded-full text-[10px] font-black uppercase hover:bg-indigo-500/20 transition" title="Editar Datos">✏️</button>
                           </div>
                         </td>
@@ -1848,13 +1907,33 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                 <input type="text" required value={editCajeroForm.nombre || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, nombre: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold" />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">País Asignado</label>
-                <select required value={editCajeroForm.pais_operacion || ''} onChange={e => setEditCajeroForm({ ...editCajeroForm, pais_operacion: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold">
+                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Países Asignados (Multi-país)</label>
+                <div className="grid grid-cols-2 gap-2 bg-slate-900 border border-slate-800 p-3 rounded-lg max-h-[120px] overflow-y-auto scrollbar-none">
                   {Object.entries(paises).map(([code, info]) => {
                     if (code === 'US' || code === 'PA' || code === 'ZI' || code === 'WA' || code === 'AI') return null;
-                    return <option key={code} value={code}>{info.flag} {info.nombre}</option>;
+                    const isChecked = (editCajeroForm.pais_operacion || '').split(',').map(p => p.trim()).includes(code);
+                    return (
+                      <label key={code} className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const currentCountries = (editCajeroForm.pais_operacion || '').split(',').map(p => p.trim()).filter(Boolean);
+                            let nextCountries;
+                            if (e.target.checked) {
+                              nextCountries = [...currentCountries, code];
+                            } else {
+                              nextCountries = currentCountries.filter(c => c !== code);
+                            }
+                            setEditCajeroForm({ ...editCajeroForm, pais_operacion: nextCountries.join(',') });
+                          }}
+                          className="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span>{info.flag} {info.nombre}</span>
+                      </label>
+                    );
                   })}
-                </select>
+                </div>
               </div>
               <h4 className="text-indigo-400 font-black text-[10px] uppercase tracking-widest pt-2 border-t border-slate-800">Cuentas Bancarias / Binance</h4>
               <div className="grid grid-cols-2 gap-3">
@@ -1873,49 +1952,418 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
         </div>
       )}
 
-      {/* MODAL: EDITAR TASAS DE REMESA */}
-      {editingRemesaRates && (
+      {/* MODAL: EDITAR OPERACIÓN */}
+      {editingRemesa && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center p-4">
-          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="bg-sky-600 text-white p-5 flex justify-between items-center">
+          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-sky-650 text-white p-5 flex justify-between items-center">
               <h3 className="font-bold text-base uppercase tracking-wider flex items-center gap-2">
-                ✏️ Editar Tasas (TRX-{editingRemesaRates.id})
+                ✏️ Editar Operación (TRX-{editingRemesa.id})
               </h3>
-              <button onClick={() => setEditingRemesaRates(null)} className="text-white hover:text-sky-100 text-2xl font-bold">&times;</button>
+              <button onClick={() => setEditingRemesa(null)} className="text-white hover:text-sky-100 text-2xl font-bold">&times;</button>
             </div>
             <form onSubmit={(e) => {
               e.preventDefault();
-              onEditRemesaRates(editingRemesaRates.id, parseFloat(editTasaCompra) || 1, parseFloat(editTasaVenta) || 1);
-              setEditingRemesaRates(null);
-            }} className="p-6 space-y-4">
-              <p className="text-xs text-slate-400">Corrige las tasas de Binance asociadas a esta transacción para recalcular la ganancia histórica.</p>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase">Tasa de Compra (Origen)</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  required
-                  value={editTasaCompra}
-                  onChange={(e) => setEditTasaCompra(e.target.value)}
-                  className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-sm font-bold"
-                />
+              onEditRemesa(editingRemesa.id, editRemesaForm);
+              setEditingRemesa(null);
+            }} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-none">
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Monto Origen</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editRemesaForm.montoOrigen || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, montoOrigen: e.target.value })}
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Monto Destino</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editRemesaForm.montoDestino || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, montoDestino: e.target.value })}
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs font-bold"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase">Tasa de Venta (Destino)</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  required
-                  value={editTasaVenta}
-                  onChange={(e) => setEditTasaVenta(e.target.value)}
-                  className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-sm font-bold"
-                />
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Tasa Compra (Binance)</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    required
+                    value={editRemesaForm.tasaCompra || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, tasaCompra: e.target.value })}
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Tasa Venta (Binance)</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    required
+                    value={editRemesaForm.tasaVenta || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, tasaVenta: e.target.value })}
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Tasa Aplicada (Cliente)</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    required
+                    value={editRemesaForm.tasaVentaAplicada || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, tasaVentaAplicada: e.target.value })}
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs"
+                  />
+                </div>
               </div>
+
+              <h4 className="text-sky-400 font-black text-[9px] uppercase tracking-widest pt-2 border-t border-slate-800">Referencias de Pago</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Ref. Origen (Banco Receptor)</label>
+                  <input
+                    type="text"
+                    value={editRemesaForm.refOrigen || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, refOrigen: e.target.value })}
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Ref. Destino (Banco Emisor)</label>
+                  <input
+                    type="text"
+                    value={editRemesaForm.refDestino || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, refDestino: e.target.value })}
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Ref. Binance Compra</label>
+                  <input
+                    type="text"
+                    value={editRemesaForm.refBinanceCompra || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, refBinanceCompra: e.target.value })}
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Ref. Binance Venta</label>
+                  <input
+                    type="text"
+                    value={editRemesaForm.refBinanceVenta || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, refBinanceVenta: e.target.value })}
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs"
+                  />
+                </div>
+              </div>
+
+              <h4 className="text-sky-400 font-black text-[9px] uppercase tracking-widest pt-2 border-t border-slate-800">Estado y Resolución</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Estado</label>
+                  <select
+                    value={editRemesaForm.estado || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, estado: e.target.value })}
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs font-bold"
+                  >
+                    <option value="PENDIENTE">⏳ PENDIENTE</option>
+                    <option value="PAGADO">✅ PAGADO</option>
+                    <option value="CANCELADO">🗑️ CANCELADO</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">Motivo de Cancelación</label>
+                  <input
+                    type="text"
+                    disabled={editRemesaForm.estado !== 'CANCELADO'}
+                    value={editRemesaForm.motivoCancelacion || ''}
+                    onChange={(e) => setEditRemesaForm({ ...editRemesaForm, motivoCancelacion: e.target.value })}
+                    placeholder="Solo si se cancela"
+                    className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2 text-slate-100 focus:outline-none text-xs disabled:opacity-40"
+                  />
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-4 border-t border-slate-800">
-                <button type="button" onClick={() => setEditingRemesaRates(null)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cancelar</button>
+                <button type="button" onClick={() => setEditingRemesa(null)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cancelar</button>
                 <button type="submit" className="w-2/3 py-2.5 rounded-lg font-extrabold bg-sky-600 hover:bg-sky-700 text-white transition shadow-lg shadow-sky-600/20 text-xs uppercase">Guardar Cambios</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR DATOS DEL CLIENTE */}
+      {editingCliente && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-indigo-600 text-white p-5 flex justify-between items-center">
+              <h3 className="font-bold text-base uppercase tracking-wider flex items-center gap-2">
+                ✏️ Editar Datos de Cliente
+              </h3>
+              <button onClick={() => setEditingCliente(null)} className="text-white hover:text-indigo-100 text-2xl font-bold">&times;</button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              onEditCliente(editingCliente.id, editClienteForm);
+              setEditingCliente(null);
+            }} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-none">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Nombre Completo</label>
+                <input type="text" required value={editClienteForm.nombre || ''} onChange={e => setEditClienteForm({ ...editClienteForm, nombre: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Cédula / DNI</label>
+                <input type="text" required value={editClienteForm.cedula_dni || ''} onChange={e => setEditClienteForm({ ...editClienteForm, cedula_dni: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Correo Electrónico</label>
+                <input type="email" value={editClienteForm.email || ''} onChange={e => setEditClienteForm({ ...editClienteForm, email: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Teléfono</label>
+                <input type="text" value={editClienteForm.telefono || ''} onChange={e => setEditClienteForm({ ...editClienteForm, telefono: e.target.value })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Saldo Billetera (USD)</label>
+                <input type="number" step="0.01" required value={editClienteForm.wallet_saldo === undefined ? '' : editClienteForm.wallet_saldo} onChange={e => setEditClienteForm({ ...editClienteForm, wallet_saldo: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold" />
+              </div>
+              <div className="flex gap-3 pt-4 border-t border-slate-800">
+                <button type="button" onClick={() => setEditingCliente(null)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cancelar</button>
+                <button type="submit" className="w-2/3 py-2.5 rounded-lg font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-lg shadow-indigo-600/20 text-xs uppercase">Guardar Cambios ✅</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: HISTORIAL DEL CLIENTE */}
+      {viewingClienteHistory && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-indigo-600 text-white p-5 flex justify-between items-center">
+              <h3 className="font-bold text-base uppercase tracking-wider flex items-center gap-2">
+                🔍 Historial de Operaciones: {viewingClienteHistory.nombre}
+              </h3>
+              <button onClick={() => setViewingClienteHistory(null)} className="text-white hover:text-indigo-100 text-2xl font-bold">&times;</button>
+            </div>
+            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto scrollbar-none">
+              
+              {/* Remesas */}
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-widest text-indigo-400 mb-3">💸 Remesas Enviadas</h4>
+                <div className="overflow-x-auto bg-slate-900/40 rounded-xl border border-slate-850">
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead>
+                      <tr className="bg-slate-950 text-slate-500 font-bold uppercase border-b border-slate-800">
+                        <th className="p-3">TRX/ID</th>
+                        <th className="p-3">Fecha</th>
+                        <th className="p-3">Ruta</th>
+                        <th className="p-3 text-right">Enviado</th>
+                        <th className="p-3 text-right">Destino</th>
+                        <th className="p-3 text-center">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/40">
+                      {remesas
+                        .filter(r => r.cedula === viewingClienteHistory.cedula_dni)
+                        .map(r => (
+                          <tr key={r.id} className="hover:bg-slate-900/30 transition">
+                            <td className="p-3 font-bold text-slate-400">TRX-{r.id}</td>
+                            <td className="p-3 text-slate-500">{r.fecha}</td>
+                            <td className="p-3 font-bold text-slate-300">{r.origen} ➔ {r.destino}</td>
+                            <td className="p-3 text-right font-bold text-indigo-400">
+                              {paises[r.origen]?.simbolo || '$'} {r.montoOrigen.toFixed(2)}
+                            </td>
+                            <td className="p-3 text-right font-bold text-emerald-400">
+                              {paises[r.destino]?.simbolo || '$'} {r.montoDestino.toFixed(2)}
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${r.estado === 'PAGADO' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950' : r.estado === 'CANCELADO' ? 'bg-red-500/10 text-red-400 border border-red-950' : 'bg-amber-500/10 text-amber-400 border border-amber-950'}`}>
+                                {r.estado}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      {remesas.filter(r => r.cedula === viewingClienteHistory.cedula_dni).length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="p-4 text-center text-slate-500">No hay remesas registradas para este cliente.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Depósitos Wallet */}
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-widest text-emerald-400 mb-3">📥 Recargas / Depósitos Wallet</h4>
+                <div className="overflow-x-auto bg-slate-900/40 rounded-xl border border-slate-855">
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead>
+                      <tr className="bg-slate-950 text-slate-500 font-bold uppercase border-b border-slate-800">
+                        <th className="p-3">Ref</th>
+                        <th className="p-3 text-right">Monto</th>
+                        <th className="p-3 text-center">Tasa Compra</th>
+                        <th className="p-3 text-center">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/40">
+                      {depositos
+                        .filter(d => d.cedula === viewingClienteHistory.cedula_dni)
+                        .map(d => (
+                          <tr key={d.id} className="hover:bg-slate-900/30 transition">
+                            <td className="p-3 font-mono font-bold text-slate-400">{d.ref}</td>
+                            <td className="p-3 text-right font-black text-emerald-500">${d.monto.toFixed(2)} USD</td>
+                            <td className="p-3 text-center text-slate-400">{d.tasaCompra.toFixed(4)}</td>
+                            <td className="p-3 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${d.estado === 'PAGADO' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950' : d.estado === 'CANCELADO' ? 'bg-red-500/10 text-red-400 border border-red-950' : 'bg-amber-500/10 text-amber-400 border border-amber-950'}`}>
+                                {d.estado}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      {depositos.filter(d => d.cedula === viewingClienteHistory.cedula_dni).length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="p-4 text-center text-slate-500">No hay depósitos en billetera registrados para este cliente.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-800">
+                <button type="button" onClick={() => setViewingClienteHistory(null)} className="py-2.5 px-6 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cerrar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: HISTORIAL DEL OPERADOR */}
+      {viewingCajeroHistory && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-3xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-indigo-600 text-white p-5 flex justify-between items-center">
+              <h3 className="font-bold text-base uppercase tracking-wider flex items-center gap-2">
+                🔍 Historial del Operador: {viewingCajeroHistory.nombre}
+              </h3>
+              <button onClick={() => setViewingCajeroHistory(null)} className="text-white hover:text-indigo-100 text-2xl font-bold">&times;</button>
+            </div>
+            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto scrollbar-none">
+              
+              {/* Operaciones */}
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-widest text-indigo-400 mb-3">📝 Operaciones Procesadas (Origen o Destino)</h4>
+                <div className="overflow-x-auto bg-slate-900/40 rounded-xl border border-slate-850">
+                  <table className="w-full text-left border-collapse text-[10px]">
+                    <thead>
+                      <tr className="bg-slate-950 text-slate-500 font-bold uppercase border-b border-slate-800">
+                        <th className="p-3">TRX/ID</th>
+                        <th className="p-3">Fecha</th>
+                        <th className="p-3">Cliente</th>
+                        <th className="p-3">Ruta</th>
+                        <th className="p-3 text-right">Monto</th>
+                        <th className="p-3">Rol</th>
+                        <th className="p-3 text-center">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/40">
+                      {remesas
+                        .filter(r => r.cajeroOrigenId === viewingCajeroHistory.id || r.cajeroDestinoId === viewingCajeroHistory.id)
+                        .map(r => {
+                          const isOrig = r.cajeroOrigenId === viewingCajeroHistory.id;
+                          return (
+                            <tr key={r.id} className="hover:bg-slate-900/30 transition">
+                              <td className="p-3 font-bold text-slate-400">TRX-{r.id}</td>
+                              <td className="p-3 text-slate-500">{r.fecha}</td>
+                              <td className="p-3 text-slate-300 font-bold">{r.cliente}</td>
+                              <td className="p-3 font-bold text-slate-300">{r.origen} ➔ {r.destino}</td>
+                              <td className="p-3 text-right font-black text-indigo-400">
+                                {paises[r.origen]?.simbolo || '$'} {r.montoOrigen.toFixed(2)}
+                              </td>
+                              <td className="p-3">
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${isOrig ? 'bg-blue-500/10 text-blue-400 border border-blue-950' : 'bg-purple-500/10 text-purple-400 border border-purple-950'}`}>
+                                  {isOrig ? '🛫 ORIGEN' : '🛬 DESTINO'}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${r.estado === 'PAGADO' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950' : r.estado === 'CANCELADO' ? 'bg-red-500/10 text-red-400 border border-red-950' : 'bg-amber-500/10 text-amber-400 border border-amber-950'}`}>
+                                  {r.estado}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      {remesas.filter(r => r.cajeroOrigenId === viewingCajeroHistory.id || r.cajeroDestinoId === viewingCajeroHistory.id).length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="p-4 text-center text-slate-500">No hay operaciones procesadas por este cajero.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Retiros */}
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-widest text-amber-400 mb-3">💸 Retiros Solicitados (Caja Chica)</h4>
+                <div className="overflow-x-auto bg-slate-900/40 rounded-xl border border-slate-855">
+                  <table className="w-full text-left border-collapse text-[10px]">
+                    <thead>
+                      <tr className="bg-slate-950 text-slate-500 font-bold uppercase border-b border-slate-800">
+                        <th className="p-3">ID</th>
+                        <th className="p-3">Fecha</th>
+                        <th className="p-3 text-right">Monto</th>
+                        <th className="p-3 text-right">Fee (10%)</th>
+                        <th className="p-3 text-right">Total a Recibir</th>
+                        <th className="p-3 text-center">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/40">
+                      {retiros
+                        .filter(rt => rt.cajeroId === viewingCajeroHistory.id)
+                        .map(rt => (
+                          <tr key={rt.id} className="hover:bg-slate-900/30 transition">
+                            <td className="p-3 font-bold text-slate-400">RET-{rt.id}</td>
+                            <td className="p-3 text-slate-500">{rt.fecha}</td>
+                            <td className="p-3 text-right font-black text-emerald-500">${rt.monto.toFixed(2)}</td>
+                            <td className="p-3 text-right text-slate-400">${rt.fee.toFixed(2)}</td>
+                            <td className="p-3 text-right font-bold text-amber-500">${rt.totalRecibir.toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${rt.estado === 'PAGADO' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-950' : rt.estado === 'RECHAZADO' ? 'bg-red-500/10 text-red-400 border border-red-950' : 'bg-amber-500/10 text-amber-400 border border-amber-950'}`}>
+                                {rt.estado}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      {retiros.filter(rt => rt.cajeroId === viewingCajeroHistory.id).length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="p-4 text-center text-slate-500">No hay solicitudes de retiro registradas para este cajero.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-800">
+                <button type="button" onClick={() => setViewingCajeroHistory(null)} className="py-2.5 px-6 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cerrar</button>
+              </div>
+            </div>
           </div>
         </div>
       )}

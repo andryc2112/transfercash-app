@@ -48,12 +48,14 @@ interface Remesa {
   cajeroDestinoId?: string;
   tasaCompra?: number;
   tasaVenta?: number;
+  tasaVentaAplicada?: number;
   refOrigen?: string;
   refBinanceCompra?: string;
   refDestino?: string;
   refBinanceVenta?: string;
   gananciaCalculada?: number;
   motivoCancelacion?: string;
+  created_at?: string;
 }
 
 interface Retiro {
@@ -186,59 +188,23 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Rastreo de alertas de desfase de tasas enviadas a Telegram
-  const [paisesConAlertaEnviada, setPaisesConAlertaEnviada] = useState<Record<string, boolean>>({});
+  // Estados iniciales para deep linking desde Telegram
+  const [initialAdminTab, setInitialAdminTab] = useState<string | undefined>(undefined);
+  const [initialAdminSearch, setInitialAdminSearch] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      Object.entries(paises).forEach(([code, info]) => {
-        const marketVal = binanceMarketRates[code]?.venta || 0;
-        if (marketVal > 0 && info.venta > 0) {
-          const diff = Math.abs((info.venta - marketVal) / marketVal) * 100;
-          const yaEnviada = paisesConAlertaEnviada[code] || false;
-
-          if (diff > 1.5 && !yaEnviada) {
-            const text = `🚨 *ALERTA: DESFASE DE TASA EN ${info.flag} ${info.nombre}* 🚨\n\n` +
-              `• *Tasa Manual:* ${info.venta.toFixed(2)} ${info.simbolo}\n` +
-              `• *Tasa Binance P2P:* ${marketVal.toFixed(2)} ${info.simbolo}\n` +
-              `• *Desviación:* *${diff.toFixed(1)}%*\n\n` +
-              `⚠️ _Se requiere atención administrativa para corregir el desfase en el sistema._`;
-
-            fetch(`https://api.telegram.org/bot8576377601:AAFlnEF38oYA2i1RmwAMGIHY6slsVIvat8c/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: telegramChatId,
-                text,
-                parse_mode: 'Markdown'
-              })
-            }).then(async res => {
-              if (res.ok) setPaisesConAlertaEnviada(prev => ({ ...prev, [code]: true }));
-              else console.error('Telegram Error:', await res.json());
-            }).catch(e => console.error('Error de red enviando alerta:', e));
-          } else if (diff <= 1.5 && yaEnviada) {
-            const text = `✅ *RESOLUCIÓN: TASA ALINEADA EN ${info.flag} ${info.nombre}* \n\n` +
-              `• La tasa manual (${info.venta.toFixed(2)}) ya se encuentra alineada con Binance P2P (${marketVal.toFixed(2)} ${info.simbolo}) con un desfase menor al 1.5%.`;
-
-            fetch(`https://api.telegram.org/bot8576377601:AAFlnEF38oYA2i1RmwAMGIHY6slsVIvat8c/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: telegramChatId,
-                text,
-                parse_mode: 'Markdown'
-              })
-            }).then(async res => {
-              if (res.ok) setPaisesConAlertaEnviada(prev => ({ ...prev, [code]: false }));
-              else console.error('Telegram Error:', await res.json());
-            }).catch(e => console.error('Error de red enviando resolución:', e));
-          }
-        }
-      });
-    }, 3000);
-
-    return () => clearTimeout(timeout);
-  }, [binanceMarketRates, paises, paisesConAlertaEnviada]);
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    const searchParam = params.get('search');
+    if (tabParam) {
+      setInitialAdminTab(tabParam);
+      setIsAdminMode(true);
+    }
+    if (searchParam) {
+      setInitialAdminSearch(searchParam);
+      setIsAdminMode(true);
+    }
+  }, []);
 
   // Autenticación Supabase
   const [session, setSession] = useState<any>(null);
@@ -416,12 +382,14 @@ export default function App() {
         cajeroDestinoId: r.cajero_destino,
         tasaCompra: parseFloat(r.tasa_compra_usdt) || 1.0,
         tasaVenta: parseFloat(r.tasa_venta_usdt) || 1.0,
+        tasaVentaAplicada: parseFloat(r.tasa_venta_aplicada) || 1.0,
         refOrigen: r.referencia_banco_receptor || '',
         refBinanceCompra: r.referencia_compra_binance || '',
         refDestino: r.referencia_banco_emisor || '',
         refBinanceVenta: r.referencia_venta_binance || '',
         gananciaCalculada: parseFloat(r.ganancia_neta_usd) || 0,
         motivoCancelacion: r.motivo_cancelacion || '',
+        created_at: r.created_at,
         beneficiarios: (r.remesas_beneficiarios || []).map((b: any) => ({
           banco: b.banco,
           cuenta: b.cuenta,
@@ -517,7 +485,8 @@ export default function App() {
 
         if (payload.eventType === 'INSERT') {
           const newRemesa = payload.new as any;
-          if (newRemesa.pais_destino === cajeroPaisRef.current) {
+          const paisesCajero = cajeroPaisRef.current.split(',').map(p => p.trim()).filter(Boolean);
+          if (paisesCajero.includes(newRemesa.pais_destino)) {
             triggerToast('¡Nueva remesa para pagar en tu país! 💸');
             showBrowserNotification('Nuevo Pago Pendiente 💸', `Tienes una nueva remesa para pagar por ${newRemesa.monto_destino}`);
           } else {
@@ -669,6 +638,35 @@ export default function App() {
         const { error: benError } = await supabase.from('remesas_beneficiarios').insert(benPayloads);
         if (benError) throw new Error(`Fallo guardando cuentas destino: ${benError.message}`);
         triggerToast('Operación registrada exitosamente en Supabase.');
+
+        // Alerta Telegram de nuevo envio
+        try {
+          const originCashier = cajeros.find(c => c.id === session?.user?.id);
+          const originName = originCashier ? originCashier.nombre : (session?.user?.email || 'Cliente Directo');
+          const destCashiers = cajeros
+            .filter(c => c.pais_operacion.split(',').map(p => p.trim()).includes(data.paisDestino))
+            .map(c => c.nombre);
+          const destNames = destCashiers.length > 0 ? destCashiers.join(', ') : 'Sin cajero asignado';
+          const linkApp = window.location.origin;
+          const linkCliente = `${window.location.origin}/?tab=clientes&search=${data.clienteDoc}`;
+
+          const tgText = `🚀 *Nuevo envío registrado en la red* 🚀\n\n` +
+            `• *Cajero Destino:* ${destNames}\n` +
+            `• *Cajero Envío:* ${originName}\n` +
+            `• *Monto enviado:* ${parseFloat(data.montoOrigen).toFixed(2)} ${defaultPaisesData[data.paisOrigen]?.simbolo || data.paisOrigen}\n` +
+            `• *Monto a enviar:* ${parseFloat(data.montoDestino).toFixed(2)} ${defaultPaisesData[data.paisDestino]?.simbolo || data.paisDestino}\n\n` +
+            `🔗 [Acceder a la App](${linkApp})\n` +
+            `👤 [Ver Información del Cliente](${linkCliente})`;
+
+          fetch(`https://api.telegram.org/bot8576377601:AAFlnEF38oYA2i1RmwAMGIHY6slsVIvat8c/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: telegramChatId, text: tgText, parse_mode: 'Markdown' })
+          }).catch(err => console.error('Error enviando alerta de nuevo envio a Telegram:', err));
+        } catch (tgErr) {
+          console.error('Error preparando alerta de Telegram:', tgErr);
+        }
+
         fetchDatosSupabase();
         return true;
       }
@@ -947,31 +945,58 @@ export default function App() {
     }
   };
 
-  const handleEditRemesaRates = async (id: number, tasaCompra: number, tasaVenta: number) => {
-    addAuditLog(`Editó las tasas de la remesa TRX-${id}. Compra: ${tasaCompra}, Venta: ${tasaVenta}`);
+  const handleEditRemesa = async (id: number, data: any) => {
+    addAuditLog(`Editó los datos de la remesa TRX-${id}`);
 
-    // Recalcular la ganancia para la base de datos histórica (no afecta los saldos de caja)
-    let nuevaGanancia = 0;
-    const { data: remData } = await supabase.from('remesas').select('monto_origen, monto_destino').eq('id', id).single();
-    if (remData) {
-      const usdIn = tasaCompra > 0 ? (parseFloat(remData.monto_origen) / tasaCompra) : 0;
-      const usdOut = tasaVenta > 0 ? (parseFloat(remData.monto_destino) / tasaVenta) : 0;
-      nuevaGanancia = usdIn - usdOut;
-    }
+    const tCompra = parseFloat(data.tasaCompra) || 1.0;
+    const tVenta = parseFloat(data.tasaVenta) || 1.0;
+    const usdIn = tCompra > 0 ? (parseFloat(data.montoOrigen) / tCompra) : 0;
+    const usdOut = tVenta > 0 ? (parseFloat(data.montoDestino) / tVenta) : 0;
+    const nuevaGanancia = usdIn - usdOut;
 
     const { error } = await supabase
       .from('remesas')
       .update({
-        tasa_compra_usdt: tasaCompra,
-        tasa_venta_usdt: tasaVenta,
+        monto_origen: parseFloat(data.montoOrigen),
+        monto_destino: parseFloat(data.montoDestino),
+        tasa_compra_usdt: tCompra,
+        tasa_venta_usdt: tVenta,
+        tasa_venta_aplicada: parseFloat(data.tasaVentaAplicada) || 1.0,
+        referencia_banco_receptor: data.refOrigen,
+        referencia_banco_emisor: data.refDestino,
+        referencia_compra_binance: data.refBinanceCompra,
+        referencia_venta_binance: data.refBinanceVenta,
+        estado: data.estado,
+        motivo_cancelacion: data.motivoCancelacion,
         ganancia_neta_usd: nuevaGanancia
       })
       .eq('id', id);
+
     if (error) {
-      triggerToast(`❌ Error al editar tasas: ${error.message}`);
+      triggerToast(`❌ Error al editar remesa: ${error.message}`);
     } else {
-      triggerToast('✅ Tasas de la remesa actualizadas correctamente.');
+      triggerToast('✅ Datos de la remesa actualizados correctamente.');
       fetchDatosSupabase();
+    }
+  };
+
+  const handleEditCliente = async (id: string, data: Partial<Cliente>) => {
+    addAuditLog(`Editó los datos del cliente ${data.nombre}`);
+    const { error } = await supabase
+      .from('clientes')
+      .update({
+        nombre: data.nombre,
+        cedula_dni: data.cedula_dni,
+        telefono: data.telefono,
+        email: data.email,
+        wallet_saldo: parseFloat(data.wallet_saldo?.toString() || '0')
+      })
+      .eq('id', id);
+    if (!error) {
+      triggerToast(`Datos del cliente ${data.nombre} actualizados exitosamente.`);
+      fetchDatosSupabase();
+    } else {
+      triggerToast(`❌ Error al editar cliente: ${error.message}`);
     }
   };
 
@@ -1141,7 +1166,8 @@ export default function App() {
   }, [depositos]);
 
   const pendingRemesas = useMemo(() => {
-    return remesas.filter(r => r.estado === 'PENDIENTE' && r.destino === cajeroPais);
+    const paisesCajero = cajeroPais.split(',').map(p => p.trim()).filter(Boolean);
+    return remesas.filter(r => r.estado === 'PENDIENTE' && paisesCajero.includes(r.destino));
   }, [remesas, cajeroPais]);
 
   const cashierRetiros = useMemo(() => {
@@ -1306,9 +1332,12 @@ export default function App() {
           onApproveRetiro={handleApproveRetiro}
           onRejectRetiro={handleRejectRetiro}
           onCancelRemesa={handleCancelRemesa}
-          onEditRemesaRates={handleEditRemesaRates}
+          onEditRemesa={handleEditRemesa}
+          onEditCliente={handleEditCliente}
           onToggleEstadoCajero={handleToggleEstadoCajero}
           onEditCajero={handleEditCajero}
+          initialTab={initialAdminTab}
+          initialSearch={initialAdminSearch}
           onSyncSystem={handleSyncSystem}
           onClose={() => setIsAdminMode(false)}
         />

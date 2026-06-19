@@ -71,6 +71,7 @@ interface AdminWorkspaceProps {
   onToggleEstadoCajero: (id: string, estado: string) => void;
   onEditCajero: (id: string, data: Partial<CajeroPerfil>) => void;
   onSyncSystem: () => Promise<void>;
+  onAddCountry: (code: string, newCountry: PaisData, bankList: string[]) => Promise<void>;
   initialTab?: string;
   initialSearch?: string;
   onClose: () => void;
@@ -109,6 +110,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   onToggleEstadoCajero,
   onEditCajero,
   onSyncSystem,
+  onAddCountry,
   initialTab,
   initialSearch,
   onClose
@@ -118,6 +120,17 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   // Estados de edición local para tasas y margen para evitar reinicios por sincronización en tiempo real
   const [localRates, setLocalRates] = useState<Record<string, { compra: string; venta: string }>>({});
   const [localMargin, setLocalMargin] = useState<string>(margenGlobal.toString());
+
+  // Formulario de Nuevo País / Cuenta Digital
+  const [newCountryCode, setNewCountryCode] = useState('');
+  const [newCountryNombre, setNewCountryNombre] = useState('');
+  const [newCountrySimbolo, setNewCountrySimbolo] = useState('');
+  const [newCountryFlag, setNewCountryFlag] = useState('🏳️');
+  const [newCountryColor, setNewCountryColor] = useState('#6366f1');
+  const [newCountryCompra, setNewCountryCompra] = useState('1.0');
+  const [newCountryVenta, setNewCountryVenta] = useState('1.0');
+  const [newCountryBancos, setNewCountryBancos] = useState('');
+  const [addingCountryLoading, setAddingCountryLoading] = useState(false);
 
   // Sincronizar localMargin cuando la prop global cambia
   useEffect(() => {
@@ -1318,6 +1331,161 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               </div>
             </div>
 
+            {/* 🆕 AGREGAR NUEVO PAÍS O BILLETERA DIGITAL */}
+            <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl shadow-md space-y-4">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">
+                <span>🆕 Agregar Nuevo País / Cuenta Digital</span>
+              </h3>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const code = newCountryCode.trim().toUpperCase();
+                if (!code) return;
+                if (paises[code]) {
+                  alert(`El código ${code} ya está registrado.`);
+                  return;
+                }
+                setAddingCountryLoading(true);
+                try {
+                  const bankList = newCountryBancos
+                    .split(/[,\n]/)
+                    .map(b => b.trim())
+                    .filter(Boolean);
+                  const countryData: PaisData = {
+                    nombre: newCountryNombre.trim(),
+                    simbolo: newCountrySimbolo.trim().toUpperCase(),
+                    flag: newCountryFlag.trim(),
+                    compra: parseFloat(newCountryCompra) || 1.0,
+                    venta: parseFloat(newCountryVenta) || 1.0,
+                    color: newCountryColor.trim()
+                  };
+                  await onAddCountry(code, countryData, bankList);
+                  setNewCountryCode('');
+                  setNewCountryNombre('');
+                  setNewCountrySimbolo('');
+                  setNewCountryFlag('🏳️');
+                  setNewCountryColor('#6366f1');
+                  setNewCountryCompra('1.0');
+                  setNewCountryVenta('1.0');
+                  setNewCountryBancos('');
+                } catch (err: any) {
+                  alert(`Error: ${err.message}`);
+                } finally {
+                  setAddingCountryLoading(false);
+                }
+              }} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Código (Ej: BO, MX)</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: BO"
+                      value={newCountryCode}
+                      onChange={(e) => setNewCountryCode(e.target.value)}
+                      className="w-full bg-slate-900 text-white font-extrabold rounded-lg border border-slate-800 p-2 text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Nombre Completo</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: Bolivia / Zinli"
+                      value={newCountryNombre}
+                      onChange={(e) => setNewCountryNombre(e.target.value)}
+                      className="w-full bg-slate-900 text-white font-bold rounded-lg border border-slate-800 p-2 text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Símbolo Moneda</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: BOB / USD"
+                      value={newCountrySimbolo}
+                      onChange={(e) => setNewCountrySimbolo(e.target.value)}
+                      className="w-full bg-slate-900 text-white font-bold rounded-lg border border-slate-800 p-2 text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Emoji Bandera / Icono</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: 🇧🇴 / 📲"
+                      value={newCountryFlag}
+                      onChange={(e) => setNewCountryFlag(e.target.value)}
+                      className="w-full bg-slate-900 text-white font-bold rounded-lg border border-slate-800 p-2 text-xs focus:outline-none focus:border-indigo-500 text-center"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Tasa Compra Inicial</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      required
+                      value={newCountryCompra}
+                      onChange={(e) => setNewCountryCompra(e.target.value)}
+                      className="w-full bg-slate-900 text-white font-bold rounded-lg border border-slate-800 p-2 text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Tasa Venta Inicial</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      required
+                      value={newCountryVenta}
+                      onChange={(e) => setNewCountryVenta(e.target.value)}
+                      className="w-full bg-slate-900 text-white font-bold rounded-lg border border-slate-800 p-2 text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Color Temático</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={newCountryColor}
+                        onChange={(e) => setNewCountryColor(e.target.value)}
+                        className="w-10 h-8 bg-slate-900 rounded border border-slate-800 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        required
+                        value={newCountryColor}
+                        onChange={(e) => setNewCountryColor(e.target.value)}
+                        className="flex-grow bg-slate-900 text-white font-bold rounded-lg border border-slate-800 p-2 text-xs focus:outline-none focus:border-indigo-500 text-center"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Bancos / Plataformas Sugeridas (Opcional - Uno por línea o separados por coma)</label>
+                  <textarea
+                    placeholder="Ej: Banco Mercantil, Banco Unión, Tigo Money"
+                    value={newCountryBancos}
+                    onChange={(e) => setNewCountryBancos(e.target.value)}
+                    rows={2}
+                    className="w-full bg-slate-900 text-white rounded-lg border border-slate-800 p-2 text-xs focus:outline-none focus:border-indigo-500 font-bold"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={addingCountryLoading}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-lg shadow-indigo-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {addingCountryLoading ? 'Agregando...' : '➕ Agregar a TransferCash'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
             {/* Mantenimiento del Sistema */}
             <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl shadow-md space-y-3">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2 flex justify-between items-center">
@@ -1908,9 +2076,8 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Países Asignados (Multi-país)</label>
-                <div className="grid grid-cols-2 gap-2 bg-slate-900 border border-slate-800 p-3 rounded-lg max-h-[120px] overflow-y-auto scrollbar-none">
+                <div className="grid grid-cols-2 gap-2 bg-slate-900 border border-slate-800 p-3 rounded-lg max-h-[180px] overflow-y-auto">
                   {Object.entries(paises).map(([code, info]) => {
-                    if (code === 'US' || code === 'PA' || code === 'ZI' || code === 'WA' || code === 'AI') return null;
                     const isChecked = (editCajeroForm.pais_operacion || '').split(',').map(p => p.trim()).includes(code);
                     return (
                       <label key={code} className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer">

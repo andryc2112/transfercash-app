@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { CalculadoraRemesa, defaultPaisesData } from './components/CalculadoraRemesa';
+import { CalculadoraRemesa, defaultPaisesData, bancosDB } from './components/CalculadoraRemesa';
 import type { PaisData } from './components/CalculadoraRemesa';
 import { TablaPendientes } from './components/TablaPendientes';
 import { SeccionRetiros } from './components/SeccionRetiros';
@@ -107,6 +107,10 @@ export default function App() {
   const [paises, setPaises] = useState<Record<string, PaisData>>(() => {
     const local = localStorage.getItem('tc_paisesData');
     return local ? JSON.parse(local) : defaultPaisesData;
+  });
+  const [bancos, setBancos] = useState<Record<string, string[]>>(() => {
+    const local = localStorage.getItem('tc_bancosData');
+    return local ? JSON.parse(local) : bancosDB;
   });
 
   // Workspace Admin
@@ -369,8 +373,8 @@ export default function App() {
         destino: r.pais_destino,
         montoOrigen: parseFloat(r.monto_origen),
         montoDestino: parseFloat(r.monto_destino),
-        simboloOrigen: defaultPaisesData[r.pais_origen]?.simbolo || 'USD',
-        simboloDestino: defaultPaisesData[r.pais_destino]?.simbolo || 'USD',
+        simboloOrigen: paises[r.pais_origen]?.simbolo || defaultPaisesData[r.pais_origen]?.simbolo || 'USD',
+        simboloDestino: paises[r.pais_destino]?.simbolo || defaultPaisesData[r.pais_destino]?.simbolo || 'USD',
         cliente: r.clientes?.nombre || 'Desconocido',
         cedula: r.clientes?.cedula_dni || 'N/A',
         telefono: r.clientes?.telefono || '',
@@ -430,6 +434,9 @@ export default function App() {
       .from('configuracion_global')
       .select('*');
 
+    let customPaises: Record<string, PaisData> = {};
+    let customBancos: Record<string, string[]> = {};
+
     if (configData) {
       const sanConfig = configData.find((c: any) => c.clave === 'showSanTab');
       const walletConfig = configData.find((c: any) => c.clave === 'showWalletFeatures');
@@ -449,29 +456,48 @@ export default function App() {
       if (tgConfig) {
         setTelegramChatId(tgConfig.valor);
       }
+      const customPaisesConfig = configData.find((c: any) => c.clave === 'custom_paises_metadata');
+      if (customPaisesConfig) {
+        try {
+          customPaises = JSON.parse(customPaisesConfig.valor);
+        } catch (e) {
+          console.error("Error parsing custom_paises_metadata:", e);
+        }
+      }
+      const customBancosConfig = configData.find((c: any) => c.clave === 'custom_bancos_db');
+      if (customBancosConfig) {
+        try {
+          customBancos = JSON.parse(customBancosConfig.valor);
+        } catch (e) {
+          console.error("Error parsing custom_bancos_db:", e);
+        }
+      }
     }
+
+    const mergedPaises = { ...defaultPaisesData, ...customPaises };
+    const mergedBancos = { ...bancosDB, ...customBancos };
+    setBancos(mergedBancos);
+    localStorage.setItem('tc_bancosData', JSON.stringify(mergedBancos));
 
     // 5. Fetch configuracion_tasas
     const { data: tasasData } = await supabase
       .from('configuracion_tasas')
       .select('*');
 
+    const finalPaises = { ...mergedPaises };
     if (tasasData) {
-      setPaises(prev => {
-        const updated = { ...prev };
-        tasasData.forEach((t: any) => {
-          if (updated[t.pais_codigo]) {
-            updated[t.pais_codigo] = {
-              ...updated[t.pais_codigo],
-              compra: parseFloat(t.compra) || 0,
-              venta: parseFloat(t.venta) || 0,
-            };
-          }
-        });
-        localStorage.setItem('tc_paisesData', JSON.stringify(updated));
-        return updated;
+      tasasData.forEach((t: any) => {
+        if (finalPaises[t.pais_codigo]) {
+          finalPaises[t.pais_codigo] = {
+            ...finalPaises[t.pais_codigo],
+            compra: parseFloat(t.compra) || 0,
+            venta: parseFloat(t.venta) || 0,
+          };
+        }
       });
     }
+    setPaises(finalPaises);
+    localStorage.setItem('tc_paisesData', JSON.stringify(finalPaises));
   };
 
   // Controlador inteligente en tiempo real
@@ -653,8 +679,8 @@ export default function App() {
           const tgText = `🚀 *Nuevo envío registrado en la red* 🚀\n\n` +
             `• *Cajero Destino:* ${destNames}\n` +
             `• *Cajero Envío:* ${originName}\n` +
-            `• *Monto enviado:* ${parseFloat(data.montoOrigen).toFixed(2)} ${defaultPaisesData[data.paisOrigen]?.simbolo || data.paisOrigen}\n` +
-            `• *Monto a enviar:* ${parseFloat(data.montoDestino).toFixed(2)} ${defaultPaisesData[data.paisDestino]?.simbolo || data.paisDestino}\n\n` +
+            `• *Monto enviado:* ${parseFloat(data.montoOrigen).toFixed(2)} ${paises[data.paisOrigen]?.simbolo || defaultPaisesData[data.paisOrigen]?.simbolo || data.paisOrigen}\n` +
+            `• *Monto a enviar:* ${parseFloat(data.montoDestino).toFixed(2)} ${paises[data.paisDestino]?.simbolo || defaultPaisesData[data.paisDestino]?.simbolo || data.paisDestino}\n\n` +
             `🔗 [Acceder a la App](${linkApp})\n` +
             `👤 [Ver Información del Cliente](${linkCliente})`;
 
@@ -899,6 +925,91 @@ export default function App() {
 
     if (error) triggerToast(`Error de Servidor: ${error.message}`);
     else triggerToast(`Tasa de ${paises[code]?.nombre || code} guardada en el servidor con éxito.`);
+  };
+
+  const handleAddCountry = async (code: string, newCountry: PaisData, bankList: string[]) => {
+    // 1. Fetch current custom_paises_metadata from Supabase
+    const { data: configData } = await supabase
+      .from('configuracion_global')
+      .select('*')
+      .eq('clave', 'custom_paises_metadata');
+    
+    let currentCustomPaises = {};
+    if (configData && configData.length > 0) {
+      try {
+        currentCustomPaises = JSON.parse(configData[0].valor);
+      } catch (e) {
+        console.error("Error parsing custom_paises_metadata from db:", e);
+      }
+    }
+    
+    // Merge new country
+    const updatedCustomPaises = {
+      ...currentCustomPaises,
+      [code]: {
+        nombre: newCountry.nombre,
+        simbolo: newCountry.simbolo,
+        flag: newCountry.flag,
+        compra: newCountry.compra,
+        venta: newCountry.venta,
+        color: newCountry.color
+      }
+    };
+    
+    // Save to configuracion_global
+    const { error: errPaises } = await supabase
+      .from('configuracion_global')
+      .upsert({ clave: 'custom_paises_metadata', valor: JSON.stringify(updatedCustomPaises) }, { onConflict: 'clave' });
+      
+    if (errPaises) {
+      triggerToast(`Error al guardar metadatos de país: ${errPaises.message}`);
+      return;
+    }
+    
+    // 2. Save banks if provided
+    if (bankList.length > 0) {
+      const { data: bankConfigData } = await supabase
+        .from('configuracion_global')
+        .select('*')
+        .eq('clave', 'custom_bancos_db');
+        
+      let currentCustomBancos = {};
+      if (bankConfigData && bankConfigData.length > 0) {
+        try {
+          currentCustomBancos = JSON.parse(bankConfigData[0].valor);
+        } catch (e) {
+          console.error("Error parsing custom_bancos_db from db:", e);
+        }
+      }
+      
+      const updatedCustomBancos = {
+        ...currentCustomBancos,
+        [code]: bankList
+      };
+      
+      const { error: errBancos } = await supabase
+        .from('configuracion_global')
+        .upsert({ clave: 'custom_bancos_db', valor: JSON.stringify(updatedCustomBancos) }, { onConflict: 'clave' });
+        
+      if (errBancos) {
+        triggerToast(`Error al guardar bancos sugeridos: ${errBancos.message}`);
+      }
+    }
+    
+    // 3. Upsert rates to configuracion_tasas
+    const { error: errRates } = await supabase
+      .from('configuracion_tasas')
+      .upsert({ pais_codigo: code, compra: newCountry.compra, venta: newCountry.venta }, { onConflict: 'pais_codigo' });
+      
+    if (errRates) {
+      triggerToast(`Error al guardar tasas del país: ${errRates.message}`);
+    }
+    
+    addAuditLog(`Agregó nuevo país/cuenta digital: ${newCountry.nombre} (${code})`);
+    triggerToast(`País/Cuenta digital ${newCountry.nombre} creado con éxito.`);
+    
+    // Reload state
+    await fetchDatosSupabase();
   };
 
   const handleUpdateMargenGlobal = (newMargin: number) => {
@@ -1339,6 +1450,7 @@ export default function App() {
           initialTab={initialAdminTab}
           initialSearch={initialAdminSearch}
           onSyncSystem={handleSyncSystem}
+          onAddCountry={handleAddCountry}
           onClose={() => setIsAdminMode(false)}
         />
       ) : !adminEmails.includes(session?.user?.email) && cajeros.find(c => c.id === session?.user?.id)?.estado !== 'ACTIVO' ? (
@@ -1395,6 +1507,7 @@ export default function App() {
                 onBuscarCliente={handleBuscarCliente}
                 showWallet={showWalletFeatures}
                 paisesData={paises}
+                bancosData={bancos}
                 margen={margenGlobal}
                 binanceMarketRates={binanceMarketRates}
               />

@@ -47,6 +47,7 @@ interface CalculadoraRemesaProps {
   onBuscarCliente?: (cedula: string) => Promise<any>;
   showWallet?: boolean;
   paisesData?: Record<string, PaisData>;
+  bancosData?: Record<string, string[]>;
   margen?: number;
   binanceMarketRates?: Record<string, { compra: number; venta: number }>;
 }
@@ -56,6 +57,7 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
   onBuscarCliente,
   showWallet = true,
   paisesData = defaultPaisesData,
+  bancosData = bancosDB,
   margen = 5.0,
   binanceMarketRates
 }) => {
@@ -584,10 +586,10 @@ export const CalculadoraRemesa: React.FC<CalculadoraRemesaProps> = ({
                           className="w-full bg-white rounded-lg border border-slate-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                         >
                           <option value="">Seleccione Banco...</option>
-                          {(bancosDB[paisDestino] || []).map((bancoName) => (
+                          {(bancosData[paisDestino] || []).map((bancoName) => (
                             <option key={bancoName} value={bancoName}>{bancoName}</option>
                           ))}
-                          {b.banco && !(bancosDB[paisDestino] || []).includes(b.banco) && b.banco !== 'Otro' && (
+                          {b.banco && !(bancosData[paisDestino] || []).includes(b.banco) && b.banco !== 'Otro' && (
                             <option value={b.banco}>{b.banco}</option>
                           )}
                           <option value="Otro">Otro (Especificar en cuenta)</option>

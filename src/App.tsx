@@ -117,6 +117,7 @@ export default function App() {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isEditingSelfBanks, setIsEditingSelfBanks] = useState(false);
   const [selfBanksForm, setSelfBanksForm] = useState<Partial<CajeroPerfil>>({});
+  const [solicitudesPerfil, setSolicitudesPerfil] = useState<any[]>([]);
 
   const [cajeros, setCajeros] = useState<CajeroPerfil[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -512,6 +513,21 @@ export default function App() {
           console.error("Error parsing custom_bancos_db:", e);
         }
       }
+
+      const requests = configData
+        .filter((c: any) => c.clave.startsWith('solicitud_perfil_'))
+        .map((c: any) => {
+          try {
+            return {
+              cajeroId: c.clave.replace('solicitud_perfil_', ''),
+              datos: JSON.parse(c.valor)
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter((r: any): r is any => r !== null);
+      setSolicitudesPerfil(requests);
     }
 
     const mergedPaises = { ...defaultPaisesData, ...customPaises };
@@ -1260,6 +1276,91 @@ export default function App() {
     }
   };
 
+  const handleRequestEditPerfil = async (id: string, data: Partial<CajeroPerfil>) => {
+    addAuditLog(`Solicitó una actualización de perfil para el cajero ${data.nombre}`);
+    const { error } = await supabase
+      .from('configuracion_global')
+      .upsert({
+        clave: `solicitud_perfil_${id}`,
+        valor: JSON.stringify(data)
+      }, { onConflict: 'clave' });
+      
+    if (!error) {
+      triggerToast('✅ Solicitud de cambio enviada. El administrador deberá aprobarla.');
+      fetchDatosSupabase();
+    } else {
+      triggerToast(`❌ Error al enviar la solicitud: ${error.message}`);
+    }
+  };
+
+  const handleCancelRequestPerfil = async (id: string) => {
+    addAuditLog(`Canceló su solicitud de cambio de perfil.`);
+    const { error } = await supabase
+      .from('configuracion_global')
+      .delete()
+      .eq('clave', `solicitud_perfil_${id}`);
+      
+    if (!error) {
+      triggerToast('✅ Solicitud cancelada y retirada.');
+      fetchDatosSupabase();
+    } else {
+      triggerToast(`❌ Error al cancelar la solicitud: ${error.message}`);
+    }
+  };
+
+  const handleApprovePerfil = async (cajeroId: string, datos: any) => {
+    addAuditLog(`Aprobó actualización de perfil para el cajero ${datos.nombre}`);
+    
+    const serializedBancos = JSON.stringify(datos.bancoConfig || {});
+    const firstPais = (datos.pais_operacion || 'VE').split(',')[0].trim();
+    const firstConfig = datos.bancoConfig?.[firstPais] || { banco: '', cuenta: '', titular: '', cedula: '' };
+
+    const { error } = await supabase
+      .from('perfiles_cajeros')
+      .update({
+        nombre: datos.nombre,
+        binance_wallet: datos.binance_wallet,
+        banco_nombre: firstConfig.banco,
+        banco_cuenta: serializedBancos,
+        banco_titular: firstConfig.titular,
+        banco_cedula: firstConfig.cedula
+      })
+      .eq('id', cajeroId);
+
+    if (error) {
+      triggerToast(`❌ Error al actualizar perfil: ${error.message}`);
+      return;
+    }
+
+    const { error: delError } = await supabase
+      .from('configuracion_global')
+      .delete()
+      .eq('clave', `solicitud_perfil_${cajeroId}`);
+
+    if (!delError) {
+      triggerToast('✅ Perfil del cajero aprobado y actualizado.');
+      fetchDatosSupabase();
+    } else {
+      triggerToast('⚠️ Perfil actualizado pero la solicitud no se pudo borrar.');
+    }
+  };
+
+  const handleRejectPerfil = async (cajeroId: string) => {
+    addAuditLog(`Rechazó actualización de perfil para el cajero ID ${cajeroId}`);
+    
+    const { error } = await supabase
+      .from('configuracion_global')
+      .delete()
+      .eq('clave', `solicitud_perfil_${cajeroId}`);
+
+    if (!error) {
+      triggerToast('❌ Solicitud de cambio de perfil rechazada.');
+      fetchDatosSupabase();
+    } else {
+      triggerToast(`❌ Error al rechazar la solicitud: ${error.message}`);
+    }
+  };
+
   const handleSyncSystem = async () => {
     triggerToast('🔄 Iniciando sincronización profunda. Por favor, no cierres la ventana...');
     try {
@@ -1495,6 +1596,9 @@ export default function App() {
           onEditCliente={handleEditCliente}
           onToggleEstadoCajero={handleToggleEstadoCajero}
           onEditCajero={handleEditCajero}
+          solicitudesPerfil={solicitudesPerfil}
+          onApprovePerfil={handleApprovePerfil}
+          onRejectPerfil={handleRejectPerfil}
           initialTab={initialAdminTab}
           initialSearch={initialAdminSearch}
           onSyncSystem={handleSyncSystem}
@@ -1532,7 +1636,7 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-4">
-              {adminEmails.includes(session?.user?.email) ? (
+              {adminEmails.includes(session?.user?.email) && (
                 <button
                   onClick={() => setIsAdminMode(true)}
                   title="Workspace de Administración"
@@ -1540,15 +1644,14 @@ export default function App() {
                 >
                   <Settings className="w-3.5 h-3.5 text-indigo-400" /> Admin
                 </button>
-              ) : (
-                <button
-                  onClick={() => setIsEditingSelfBanks(true)}
-                  title="Configurar mis cuentas de banco"
-                  className="text-slate-400 hover:text-indigo-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900 flex items-center gap-1.5 text-xs font-bold"
-                >
-                  🏦 Mis Bancos
-                </button>
               )}
+              <button
+                onClick={() => setIsEditingSelfBanks(true)}
+                title="Editar Mi Perfil / Datos Bancarios"
+                className="text-slate-400 hover:text-indigo-400 transition p-2 bg-slate-900/60 rounded-xl border border-slate-900 flex items-center gap-1.5 text-xs font-bold"
+              >
+                👤 Mi Perfil
+              </button>
               <div className="hidden sm:flex flex-col text-right">
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Mi Caja Chica</span>
                 <span className="text-sm font-black text-indigo-400">${saldoAcumulado.toFixed(2)} USD</span>
@@ -1829,122 +1932,169 @@ export default function App() {
           <div className="bg-slate-950 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 text-slate-100">
             <div className="bg-indigo-600 text-white p-5 flex justify-between items-center flex-shrink-0">
               <h3 className="font-bold text-base uppercase tracking-wider flex items-center gap-2">
-                🏦 Configurar Mis Cuentas de Banco
+                👤 Editar Mi Perfil / Datos Bancarios
               </h3>
               <button onClick={() => setIsEditingSelfBanks(false)} className="text-white hover:text-indigo-100 text-2xl font-bold">&times;</button>
             </div>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              if (session?.user?.id) {
-                await handleEditCajero(session.user.id, selfBanksForm);
-                setIsEditingSelfBanks(false);
-              }
-            }} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-none text-slate-100">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Mi Nombre</label>
-                <input
-                  type="text"
-                  required
-                  value={selfBanksForm.nombre || ''}
-                  onChange={e => setSelfBanksForm({ ...selfBanksForm, nombre: e.target.value })}
-                  className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold"
-                />
-              </div>
-
-              <h4 className="text-indigo-400 font-black text-[10px] uppercase tracking-widest pt-2 border-t border-slate-800">Cuentas Bancarias por País / Canal</h4>
-              <div className="space-y-4 max-h-[260px] overflow-y-auto pr-1">
-                {(selfBanksForm.pais_operacion || '').split(',').map(p => p.trim()).filter(Boolean).map(code => {
-                  const info = paises[code] || { nombre: code, flag: '🏳️' };
-                  const config = selfBanksForm.bancoConfig?.[code] || { banco: '', cuenta: '', titular: '', cedula: '' };
-                  const updateConfig = (field: keyof BancoCuentaConfig, value: string) => {
-                    const nextConfig = {
-                      ...(selfBanksForm.bancoConfig || {}),
-                      [code]: {
-                        ...config,
-                        [field]: value
-                      }
-                    };
-                    setSelfBanksForm({
-                      ...selfBanksForm,
-                      bancoConfig: nextConfig
-                    });
-                  };
-
-                  return (
-                    <div key={code} className="bg-slate-900/60 border border-slate-800/80 p-3 rounded-xl space-y-2">
-                      <span className="text-[10px] font-black text-indigo-350 uppercase flex items-center gap-1.5 border-b border-slate-800/60 pb-1.5">
-                        {info.flag} {info.nombre} ({code})
-                      </span>
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <div className="space-y-0.5">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Banco / Proveedor</label>
-                          <input
-                            type="text"
-                            placeholder="Ej: Banesco / Yappy"
-                            value={config.banco}
-                            onChange={e => updateConfig('banco', e.target.value)}
-                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
-                            required
-                          />
+            
+            {(() => {
+              const myPendingRequest = solicitudesPerfil.find(r => r.cajeroId === session?.user?.id);
+              if (myPendingRequest) {
+                return (
+                  <div className="p-6 space-y-5 text-slate-100 text-xs">
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-amber-400 space-y-3 leading-relaxed">
+                      <span className="font-extrabold text-sm block">⏳ Solicitud Pendiente de Aprobación</span>
+                      <p>Ya has enviado una solicitud de cambios en tu perfil. El administrador la revisará a la brevedad. Mientras tanto, no puedes realizar nuevas modificaciones.</p>
+                      
+                      <div className="border-t border-amber-500/20 pt-3.5 space-y-2">
+                        <span className="font-black text-[10px] uppercase text-amber-300 tracking-wider">Cambios propuestos:</span>
+                        <div className="grid grid-cols-2 gap-2 bg-slate-900/40 p-2.5 rounded-lg border border-slate-800/80 font-bold">
+                          <div>Nombre: <span className="text-amber-200">{myPendingRequest.datos.nombre}</span></div>
+                          <div>Binance Pay ID: <span className="text-amber-200">{myPendingRequest.datos.binance_wallet || 'N/A'}</span></div>
                         </div>
-                        <div className="space-y-0.5">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Número Cuenta / Teléfono</label>
-                          <input
-                            type="text"
-                            placeholder="0102... / +58412..."
-                            value={config.cuenta}
-                            onChange={e => updateConfig('cuenta', e.target.value)}
-                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
-                            required
-                          />
-                        </div>
-                        <div className="space-y-0.5">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Titular</label>
-                          <input
-                            type="text"
-                            placeholder="Nombre del Titular"
-                            value={config.titular}
-                            onChange={e => updateConfig('titular', e.target.value)}
-                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
-                            required
-                          />
-                        </div>
-                        <div className="space-y-0.5">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Identificación (ID/DNI)</label>
-                          <input
-                            type="text"
-                            placeholder="V-12345678"
-                            value={config.cedula}
-                            onChange={e => updateConfig('cedula', e.target.value)}
-                            className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
-                            required
-                          />
+                        <div className="space-y-1 mt-2">
+                          <strong className="text-amber-350 text-[10px] uppercase tracking-wide block">Cuentas Bancarias Propuestas:</strong>
+                          {Object.entries(myPendingRequest.datos.bancoConfig || {}).map(([code, b]: [string, any]) => (
+                            <div key={code} className="bg-slate-900/30 p-2 rounded border border-slate-800/50">
+                              <span className="font-bold text-[9px] uppercase text-amber-200/80">{code}:</span> {b.banco} | {b.cuenta} | {b.titular} | {b.cedula}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
-                  );
-                })}
-                {(selfBanksForm.pais_operacion || '').split(',').map(p => p.trim()).filter(Boolean).length === 0 && (
-                  <span className="text-[10px] text-slate-500 italic block text-center py-2">No tienes países asignados para configurar bancos.</span>
-                )}
-              </div>
+                    
+                    <div className="flex gap-3 pt-2">
+                      <button type="button" onClick={() => setIsEditingSelfBanks(false)} className="w-1/3 py-2.5 rounded-xl font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-[10px] uppercase tracking-wider">Cerrar</button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await handleCancelRequestPerfil(session.user.id);
+                          setIsEditingSelfBanks(false);
+                        }}
+                        className="w-2/3 py-2.5 rounded-xl font-extrabold bg-red-950/40 hover:bg-red-950/60 border border-red-900/35 text-red-400 transition text-[10px] uppercase tracking-wider animate-pulse hover:animate-none"
+                      >
+                        ❌ Retirar Solicitud
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+              
+              return (
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (session?.user?.id) {
+                    await handleRequestEditPerfil(session.user.id, selfBanksForm);
+                    setIsEditingSelfBanks(false);
+                  }
+                }} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-none text-slate-100">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Mi Nombre</label>
+                    <input
+                      type="text"
+                      required
+                      value={selfBanksForm.nombre || ''}
+                      onChange={e => setSelfBanksForm({ ...selfBanksForm, nombre: e.target.value })}
+                      className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold"
+                    />
+                  </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Binance Wallet / Pay ID (Global)</label>
-                <input
-                  type="text"
-                  required
-                  value={selfBanksForm.binance_wallet || ''}
-                  onChange={e => setSelfBanksForm({ ...selfBanksForm, binance_wallet: e.target.value })}
-                  className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold"
-                />
-              </div>
+                  <h4 className="text-indigo-400 font-black text-[10px] uppercase tracking-widest pt-2 border-t border-slate-800">Cuentas Bancarias por País / Canal</h4>
+                  <div className="space-y-4 max-h-[260px] overflow-y-auto pr-1">
+                    {(selfBanksForm.pais_operacion || '').split(',').map(p => p.trim()).filter(Boolean).map(code => {
+                      const info = paises[code] || { nombre: code, flag: '🏳️' };
+                      const config = selfBanksForm.bancoConfig?.[code] || { banco: '', cuenta: '', titular: '', cedula: '' };
+                      const updateConfig = (field: keyof BancoCuentaConfig, value: string) => {
+                        const nextConfig = {
+                          ...(selfBanksForm.bancoConfig || {}),
+                          [code]: {
+                            ...config,
+                            [field]: value
+                          }
+                        };
+                        setSelfBanksForm({
+                          ...selfBanksForm,
+                          bancoConfig: nextConfig
+                        });
+                      };
 
-              <div className="flex gap-3 pt-4 border-t border-slate-800">
-                <button type="button" onClick={() => setIsEditingSelfBanks(false)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cancelar</button>
-                <button type="submit" className="w-2/3 py-2.5 rounded-lg font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-lg shadow-indigo-600/20 text-xs uppercase">Guardar Cambios ✅</button>
-              </div>
-            </form>
+                      return (
+                        <div key={code} className="bg-slate-900/60 border border-slate-800/80 p-3 rounded-xl space-y-2">
+                          <span className="text-[10px] font-black text-indigo-350 uppercase flex items-center gap-1.5 border-b border-slate-800/60 pb-1.5">
+                            {info.flag} {info.nombre} ({code})
+                          </span>
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div className="space-y-0.5">
+                              <label className="text-[9px] font-bold text-slate-500 uppercase">Banco / Proveedor</label>
+                              <input
+                                type="text"
+                                placeholder="Ej: Banesco / Yappy"
+                                value={config.banco}
+                                onChange={e => updateConfig('banco', e.target.value)}
+                                className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-0.5">
+                              <label className="text-[9px] font-bold text-slate-500 uppercase">Número Cuenta / Teléfono</label>
+                              <input
+                                type="text"
+                                placeholder="0102... / +58412..."
+                                value={config.cuenta}
+                                onChange={e => updateConfig('cuenta', e.target.value)}
+                                className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-0.5">
+                              <label className="text-[9px] font-bold text-slate-500 uppercase">Titular</label>
+                              <input
+                                type="text"
+                                placeholder="Nombre del Titular"
+                                value={config.titular}
+                                onChange={e => updateConfig('titular', e.target.value)}
+                                className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-0.5">
+                              <label className="text-[9px] font-bold text-slate-500 uppercase">Identificación (ID/DNI)</label>
+                              <input
+                                type="text"
+                                placeholder="V-12345678"
+                                value={config.cedula}
+                                onChange={e => updateConfig('cedula', e.target.value)}
+                                className="w-full bg-slate-950 rounded-lg border border-slate-800/80 p-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs font-bold"
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(selfBanksForm.pais_operacion || '').split(',').map(p => p.trim()).filter(Boolean).length === 0 && (
+                      <span className="text-[10px] text-slate-500 italic block text-center py-2">No tienes países asignados para configurar bancos.</span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Binance Wallet / Pay ID (Global)</label>
+                    <input
+                      type="text"
+                      required
+                      value={selfBanksForm.binance_wallet || ''}
+                      onChange={e => setSelfBanksForm({ ...selfBanksForm, binance_wallet: e.target.value })}
+                      className="w-full bg-slate-900 rounded-lg border border-slate-800 p-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t border-slate-800">
+                    <button type="button" onClick={() => setIsEditingSelfBanks(false)} className="w-1/3 py-2.5 rounded-lg font-bold border border-slate-800 hover:bg-slate-900 text-slate-400 transition text-xs uppercase">Cancelar</button>
+                    <button type="submit" className="w-2/3 py-2.5 rounded-lg font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-lg shadow-indigo-600/20 text-xs uppercase">Enviar Solicitud 🚀</button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </div>
       )}

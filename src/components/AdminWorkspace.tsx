@@ -80,6 +80,9 @@ interface AdminWorkspaceProps {
   onEditCajero: (id: string, data: Partial<CajeroPerfil>) => void;
   onSyncSystem: () => Promise<void>;
   onAddCountry: (code: string, newCountry: PaisData, bankList: string[]) => Promise<void>;
+  solicitudesPerfil: any[];
+  onApprovePerfil: (cajeroId: string, datos: any) => Promise<void>;
+  onRejectPerfil: (cajeroId: string) => Promise<void>;
   initialTab?: string;
   initialSearch?: string;
   onClose: () => void;
@@ -119,6 +122,9 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
   onEditCajero,
   onSyncSystem,
   onAddCountry,
+  solicitudesPerfil,
+  onApprovePerfil,
+  onRejectPerfil,
   initialTab,
   initialSearch,
   onClose
@@ -475,6 +481,7 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
         {[
           { id: 'resumen', label: '📈 Resumen' },
           { id: 'operaciones', label: '📝 Operaciones' },
+          { id: 'aprobaciones', label: `✅ Aprobaciones ${solicitudesPerfil.length > 0 ? `(${solicitudesPerfil.length})` : ''}` },
           { id: 'clientes', label: '👤 Clientes' },
           { id: 'operadores', label: '👥 Operadores' },
           { id: 'retiros', label: '💸 Retiros' },
@@ -991,6 +998,149 @@ export const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: APROBACIONES DE CAMBIOS DE PERFIL */}
+        {activeTab === 'aprobaciones' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div>
+              <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">✅ Solicitudes de Actualización de Perfil</h2>
+              <p className="text-xs text-slate-500 mb-6">Revisa y aprueba los cambios de datos personales o bancarios solicitados por los cajeros.</p>
+              
+              {solicitudesPerfil.length === 0 ? (
+                <div className="bg-slate-950 border border-slate-800 p-8 rounded-2xl text-center shadow-lg">
+                  <span className="text-4xl block mb-2">🎉</span>
+                  <span className="text-sm text-slate-400 font-bold">No hay solicitudes pendientes</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6">
+                  {solicitudesPerfil.map((req) => {
+                    const currentProfile = cajeros.find(c => c.id === req.cajeroId);
+                    return (
+                      <div key={req.cajeroId} className="bg-slate-950 border border-slate-850 rounded-2xl p-6 space-y-5 shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-650" />
+                        
+                        <div className="flex justify-between items-start border-b border-slate-900 pb-3">
+                          <div>
+                            <h3 className="font-extrabold text-sm text-indigo-400 uppercase">Solicitud de: {currentProfile?.nombre || 'Cajero Desconocido'}</h3>
+                            <span className="text-[10px] text-slate-500 font-bold block mt-1">ID Cajero: {req.cajeroId}</span>
+                          </div>
+                          <span className="text-[10px] bg-amber-500/10 text-amber-400 px-3 py-1 rounded-md font-black border border-amber-950/80 uppercase">
+                            Pendiente Aprobación ⏳
+                          </span>
+                        </div>
+                        
+                        {/* Diferencias de Campos */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                          {/* Datos Básicos */}
+                          <div className="bg-slate-900/30 border border-slate-850/60 p-4 rounded-xl space-y-3">
+                            <h4 className="font-black text-[10px] uppercase text-indigo-350 tracking-wider pb-1.5 border-b border-slate-900">Datos Básicos</h4>
+                            {currentProfile?.nombre !== req.datos.nombre && (
+                              <div className="space-y-0.5">
+                                <span className="text-slate-500 font-bold text-[10px] uppercase block">Nombre de Perfil:</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-red-400 line-through bg-red-950/20 px-1.5 py-0.5 rounded">{currentProfile?.nombre}</span>
+                                  <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
+                                  <span className="text-emerald-400 font-bold bg-emerald-950/20 px-1.5 py-0.5 rounded">{req.datos.nombre}</span>
+                                </div>
+                              </div>
+                            )}
+                            {currentProfile?.binance_wallet !== req.datos.binance_wallet && (
+                              <div className="space-y-0.5">
+                                <span className="text-slate-500 font-bold text-[10px] uppercase block">Binance Wallet / Pay ID:</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-red-400 line-through bg-red-950/20 px-1.5 py-0.5 rounded">{currentProfile?.binance_wallet || 'N/A'}</span>
+                                  <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
+                                  <span className="text-emerald-400 font-bold bg-emerald-950/20 px-1.5 py-0.5 rounded">{req.datos.binance_wallet}</span>
+                                </div>
+                              </div>
+                            )}
+                            {currentProfile?.nombre === req.datos.nombre && currentProfile?.binance_wallet === req.datos.binance_wallet && (
+                              <span className="text-[10px] text-slate-500 italic block py-2">Sin cambios en los datos básicos del perfil.</span>
+                            )}
+                          </div>
+                          
+                          {/* Cuentas Bancarias */}
+                          <div className="bg-slate-900/30 border border-slate-850/60 p-4 rounded-xl space-y-3">
+                            <h4 className="font-black text-[10px] uppercase text-indigo-350 tracking-wider pb-1.5 border-b border-slate-900">Cuentas Bancarias</h4>
+                            {(() => {
+                              const currentBancos = currentProfile?.bancoConfig || {};
+                              const proposedBancos = req.datos.bancoConfig || {};
+                              const allPaisesCodes = Array.from(new Set([
+                                ...Object.keys(currentBancos),
+                                ...Object.keys(proposedBancos)
+                              ]));
+                              
+                              let renderedChangesCount = 0;
+                              const rows = allPaisesCodes.map(code => {
+                                const cur = currentBancos[code];
+                                const prop = proposedBancos[code];
+                                const info = paises[code] || { nombre: code, flag: '🏳️' };
+                                
+                                const hasChange = !cur || !prop || 
+                                  cur.banco !== prop.banco || 
+                                  cur.cuenta !== prop.cuenta || 
+                                  cur.titular !== prop.titular || 
+                                  cur.cedula !== prop.cedula;
+                                  
+                                if (!hasChange) return null;
+                                renderedChangesCount++;
+                                
+                                return (
+                                  <div key={code} className="border-b border-slate-900/60 pb-2.5 last:border-0 last:pb-0 space-y-1">
+                                    <span className="font-black text-[10px] text-slate-300 flex items-center gap-1">
+                                      {info.flag} {info.nombre} ({code})
+                                    </span>
+                                    {cur ? (
+                                      <div className="text-[10px] text-red-400 line-through bg-red-950/10 p-1.5 rounded font-mono">
+                                        Actual: {cur.banco} | {cur.cuenta} | {cur.titular} | {cur.cedula}
+                                      </div>
+                                    ) : (
+                                      <div className="text-[10px] text-slate-500 italic px-1">Sin configurar anteriormente</div>
+                                    )}
+                                    {prop ? (
+                                      <div className="text-[10px] text-emerald-400 font-bold bg-emerald-950/15 p-1.5 rounded font-mono">
+                                        Nuevo: {prop.banco} | {prop.cuenta} | {prop.titular} | {prop.cedula}
+                                      </div>
+                                    ) : (
+                                      <div className="text-[10px] text-red-500 font-bold bg-red-950/20 p-1 rounded">Eliminar cuenta</div>
+                                    )}
+                                  </div>
+                                );
+                              });
+                              
+                              if (renderedChangesCount === 0) {
+                                return <span className="text-[10px] text-slate-500 italic block py-2">Sin cambios en la configuración bancaria.</span>;
+                              }
+                              return <div className="space-y-3">{rows}</div>;
+                            })()}
+                          </div>
+                        </div>
+                        
+                        {/* Botones de acción */}
+                        <div className="flex gap-3 justify-end pt-3.5 border-t border-slate-900">
+                          <button
+                            type="button"
+                            onClick={() => onRejectPerfil(req.cajeroId)}
+                            className="px-4 py-2 rounded-xl font-bold border border-red-950/80 text-red-400 hover:bg-red-950/20 text-xs transition uppercase"
+                          >
+                            Rechazar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onApprovePerfil(req.cajeroId, req.datos)}
+                            className="px-5 py-2 rounded-xl font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white text-xs transition uppercase shadow-lg shadow-emerald-600/10"
+                          >
+                            Aprobar Cambios ✅
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

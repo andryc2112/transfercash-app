@@ -1098,6 +1098,60 @@ export default function App() {
   };
 
 
+  const recalculateCajeroBalances = async () => {
+    try {
+      const { data: allRemesas, error: errRem } = await supabase.from('remesas').select('*').eq('estado', 'PAGADO');
+      if (errRem) throw errRem;
+
+      const { data: allRetiros, error: errRet } = await supabase.from('retiros').select('*').in('estado', ['PAGADO', 'PENDIENTE']);
+      if (errRet) throw errRet;
+
+      const { data: allCajeros, error: errCaj } = await supabase.from('perfiles_cajeros').select('id');
+      if (errCaj) throw errCaj;
+
+      let cajeroBalances: Record<string, number> = {};
+      allCajeros.forEach((c: any) => {
+        cajeroBalances[c.id] = 0;
+      });
+
+      for (const rem of allRemesas) {
+        const tCompra = parseFloat(rem.tasa_compra_usdt) || 1.0;
+        const tVenta = parseFloat(rem.tasa_venta_usdt) || 1.0;
+        const usdIn = tCompra > 0 ? (parseFloat(rem.monto_origen) / tCompra) : 0;
+        const usdOut = tVenta > 0 ? (parseFloat(rem.monto_destino) / tVenta) : 0;
+
+        let ganancia = usdIn - usdOut;
+        if (tVenta === 1.0 && rem.pais_destino !== 'US' && rem.pais_destino !== 'PA') {
+          ganancia = parseFloat(rem.ganancia_neta_usd) || (usdIn * 0.05);
+        }
+
+        const mitad = ganancia / 2;
+        const orig = rem.cajero_origen;
+        const dest = rem.cajero_destino;
+
+        if (orig === dest) {
+          if (orig && cajeroBalances[orig] !== undefined) cajeroBalances[orig] += ganancia;
+        } else {
+          if (orig && cajeroBalances[orig] !== undefined) cajeroBalances[orig] += mitad;
+          if (dest && cajeroBalances[dest] !== undefined) cajeroBalances[dest] += mitad;
+        }
+      }
+
+      for (const ret of allRetiros) {
+        const cid = ret.cajero_id;
+        if (cid && cajeroBalances[cid] !== undefined) {
+          cajeroBalances[cid] -= parseFloat(ret.monto);
+        }
+      }
+
+      for (const cid of Object.keys(cajeroBalances)) {
+        await supabase.from('perfiles_cajeros').update({ saldo_acumulado: cajeroBalances[cid] }).eq('id', cid);
+      }
+    } catch (error: any) {
+      console.error('Error recalculando saldos de cajeros:', error);
+    }
+  };
+
   const handleCancelRemesa = async (id: number, motivo: string) => {
     addAuditLog(`Canceló remesa TRX-${id} con motivo: ${motivo}`);
 
@@ -1108,6 +1162,7 @@ export default function App() {
 
     if (!error) {
       triggerToast('Transacción cancelada exitosamente.');
+      await recalculateCajeroBalances();
       fetchDatosSupabase();
     }
   };
@@ -1143,6 +1198,7 @@ export default function App() {
       triggerToast(`❌ Error al editar remesa: ${error.message}`);
     } else {
       triggerToast('✅ Datos de la remesa actualizados correctamente.');
+      await recalculateCajeroBalances();
       fetchDatosSupabase();
     }
   };
